@@ -1,32 +1,36 @@
-const dbFunctions = require('../../db/database'); // Path to the actual database functions
+const dbFunctionsToTest = require('../../db/database');
 const { setupTestDb } = require('../helpers/dbHelper');
 
-// Hold the test database instance
-let testDb;
+// Use an object handle for the DB instance so the mock can close over the object
+// and access the instance property after it's assigned in beforeAll.
+const dbHandle = { instance: null };
 
-// Mock the getDB function from the database module to return our testDb
 jest.mock('../../db/database', () => {
     const originalModule = jest.requireActual('../../db/database');
     return {
         ...originalModule,
-        // Override getDB to return the testDb instance when it's set.
-        // This allows setSetting, getSetting, getAllSettings to use the in-memory test DB.
-        getDB: () => testDb,
+        getDB: () => {
+            if (!dbHandle.instance) {
+                // This error will correctly propagate if tests try to use DB functions
+                // before the DB is set up in beforeAll.
+                throw new Error("Test DB instance (dbHandle.instance) is not set. Check test setup.");
+            }
+            return dbHandle.instance;
+        },
+        initializeDatabase: jest.fn(), // Mock to prevent original from running
     };
 });
 
 describe('Application Settings DB Functions (using better-sqlite3)', () => {
     beforeAll(() => {
-        // Set up a new in-memory database instance for all tests in this suite
-        testDb = setupTestDb(); 
-        // At this point, any call to dbFunctions.getDB() within the scope of these tests
-        // will receive the testDb instance due to the jest.mock above.
+        // Assign the setup DB to the property of the handle
+        dbHandle.instance = setupTestDb();
     });
 
     beforeEach(() => {
         // Clear the AppSettings table before each test to ensure isolation
         try {
-            testDb.prepare('DELETE FROM AppSettings').run();
+            dbHandle.instance.prepare('DELETE FROM AppSettings').run();
         } catch (error) {
             console.error("Error clearing AppSettings table:", error);
             // Optionally, re-throw or handle to ensure tests don't run in a dirty state
@@ -36,62 +40,63 @@ describe('Application Settings DB Functions (using better-sqlite3)', () => {
 
     afterAll(() => {
         // Close the test database connection
-        if (testDb) {
-            testDb.close();
+        if (dbHandle.instance) {
+            dbHandle.instance.close();
+            dbHandle.instance = null; // Clear the handle
         }
     });
 
     test('setSetting should insert a new setting', () => {
-        const setResult = dbFunctions.setSetting('testKey', 'testValue');
-        expect(setResult).toBe(true); // Assuming setSetting returns true on success
+        const setResult = dbFunctionsToTest.setSetting('testKey', 'testValue');
+        expect(setResult).toBe(true);
 
-        const row = testDb.prepare('SELECT value FROM AppSettings WHERE key = ?').get('testKey');
+        const row = dbHandle.instance.prepare('SELECT value FROM AppSettings WHERE key = ?').get('testKey');
         expect(row).toBeDefined();
         expect(row.value).toBe('testValue');
     });
 
     test('setSetting should update an existing setting', () => {
-        dbFunctions.setSetting('testKey', 'initialValue'); // Insert
-        const updateResult = dbFunctions.setSetting('testKey', 'updatedValue'); // Update
+        dbFunctionsToTest.setSetting('testKey', 'initialValue');
+        const updateResult = dbFunctionsToTest.setSetting('testKey', 'updatedValue');
         expect(updateResult).toBe(true);
 
-        const row = testDb.prepare('SELECT value FROM AppSettings WHERE key = ?').get('testKey');
+        const row = dbHandle.instance.prepare('SELECT value FROM AppSettings WHERE key = ?').get('testKey');
         expect(row).toBeDefined();
         expect(row.value).toBe('updatedValue');
     });
     
     test('setSetting should handle different data types by storing them as strings', () => {
-        dbFunctions.setSetting('numberKey', 123);
-        let row = testDb.prepare('SELECT value FROM AppSettings WHERE key = ?').get('numberKey');
-        expect(row.value).toBe('123'); // Values are stored as TEXT
+        dbFunctionsToTest.setSetting('numberKey', 123);
+        let row = dbHandle.instance.prepare('SELECT value FROM AppSettings WHERE key = ?').get('numberKey');
+        expect(row.value).toBe('123');
 
-        dbFunctions.setSetting('booleanKey', true);
-        row = testDb.prepare('SELECT value FROM AppSettings WHERE key = ?').get('booleanKey');
+        dbFunctionsToTest.setSetting('booleanKey', true);
+        row = dbHandle.instance.prepare('SELECT value FROM AppSettings WHERE key = ?').get('booleanKey');
         expect(row.value).toBe('true');
     });
 
     test('getSetting should retrieve an existing setting', () => {
-        dbFunctions.setSetting('testKey', 'specificValue');
-        const value = dbFunctions.getSetting('testKey');
+        dbFunctionsToTest.setSetting('testKey', 'specificValue');
+        const value = dbFunctionsToTest.getSetting('testKey');
         expect(value).toBe('specificValue');
     });
 
     test('getSetting should return null for a non-existent key', () => {
-        const value = dbFunctions.getSetting('nonExistentKey');
+        const value = dbFunctionsToTest.getSetting('nonExistentKey');
         expect(value).toBeNull();
     });
 
     test('getAllSettings should return an empty object if no settings are present', () => {
-        const settings = dbFunctions.getAllSettings();
+        const settings = dbFunctionsToTest.getAllSettings();
         expect(settings).toEqual({});
     });
 
     test('getAllSettings should return all settings as an object', () => {
-        dbFunctions.setSetting('key1', 'value1');
-        dbFunctions.setSetting('key2', 'value2');
-        dbFunctions.setSetting('key3', 'anotherValue');
+        dbFunctionsToTest.setSetting('key1', 'value1');
+        dbFunctionsToTest.setSetting('key2', 'value2');
+        dbFunctionsToTest.setSetting('key3', 'anotherValue');
 
-        const settings = dbFunctions.getAllSettings();
+        const settings = dbFunctionsToTest.getAllSettings();
         expect(settings).toEqual({
             key1: 'value1',
             key2: 'value2',
@@ -100,25 +105,21 @@ describe('Application Settings DB Functions (using better-sqlite3)', () => {
     });
     
     test('setSetting should correctly update created_at and updated_at timestamps', () => {
-        // Insert
-        dbFunctions.setSetting('timestampTestKey', 'initial');
-        const initialRow = testDb.prepare('SELECT created_at, updated_at FROM AppSettings WHERE key = ?').get('timestampTestKey');
+        dbFunctionsToTest.setSetting('timestampTestKey', 'initial');
+        const initialRow = dbHandle.instance.prepare('SELECT created_at, updated_at FROM AppSettings WHERE key = ?').get('timestampTestKey');
         expect(initialRow.created_at).toBeDefined();
         expect(initialRow.updated_at).toBeDefined();
         expect(initialRow.created_at).toEqual(initialRow.updated_at);
 
-        // Wait a bit to ensure timestamps can differ if resolution allows
         return new Promise(resolve => setTimeout(() => {
-            // Update
-            dbFunctions.setSetting('timestampTestKey', 'updated');
-            const updatedRow = testDb.prepare('SELECT created_at, updated_at FROM AppSettings WHERE key = ?').get('timestampTestKey');
+            dbFunctionsToTest.setSetting('timestampTestKey', 'updated');
+            const updatedRow = dbHandle.instance.prepare('SELECT created_at, updated_at FROM AppSettings WHERE key = ?').get('timestampTestKey');
             
-            expect(updatedRow.created_at).toEqual(initialRow.created_at); // created_at should not change
-            expect(updatedRow.updated_at).not.toEqual(initialRow.updated_at); // updated_at should change
-            // Basic check that updated_at is a valid timestamp string (format depends on CURRENT_TIMESTAMP)
+            expect(updatedRow.created_at).toEqual(initialRow.created_at);
+            expect(updatedRow.updated_at).not.toEqual(initialRow.updated_at);
             expect(typeof updatedRow.updated_at).toBe('string');
             expect(updatedRow.updated_at.length).toBeGreaterThan(0); 
             resolve();
-        }, 50)); // 50ms delay; adjust if needed for timestamp resolution
+        }, 50));
     });
 });

@@ -25,10 +25,30 @@ async function getManagedRules(req, res) {
 
 async function addRule(req, res) {
     const userId = req.user ? req.user.id : null;
-    const { ruleUuid, description, desiredState } = req.body; // Assuming body parsing middleware
+    const { ruleUuid, description, desiredState } = req.body; 
 
     if (!userId) return res.status(401).json({ error: "User not authenticated." });
-    if (!ruleUuid) return res.status(400).json({ error: "Rule UUID is required." });
+    
+    // Validate ruleUuid
+    if (!ruleUuid || typeof ruleUuid !== 'string' || ruleUuid.trim() === '') {
+        return res.status(400).json({ error: "Rule UUID is required and must be a non-empty string." });
+    }
+    // Optional: Validate description length if provided
+    if (description && typeof description === 'string' && description.length > 255) { // Example max length
+        return res.status(400).json({ error: "Description cannot exceed 255 characters." });
+    }
+    // Optional: Validate desiredState (e.g., ensure it's boolean if provided)
+    if (desiredState !== undefined && typeof desiredState !== 'boolean') {
+        // Try to interpret common string values if not strictly boolean from client
+        if (String(desiredState).toLowerCase() === 'true') {
+            // desiredState = true; // This would modify req.body, careful
+        } else if (String(desiredState).toLowerCase() === 'false') {
+            // desiredState = false; // This would modify req.body
+        } else {
+            return res.status(400).json({ error: "desiredState must be a boolean (true/false)." });
+        }
+    }
+
 
     try {
         const newRule = await ruleRepository.addManagedRule({ 

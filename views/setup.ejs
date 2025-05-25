@@ -28,13 +28,13 @@
             <legend>Application Core Settings</legend>
             <div class="mb-3">
                 <label for="APP_BASE_URL" class="form-label">Application Base URL</label>
-                <input type="text" class="form-control" id="APP_BASE_URL" name="APP_BASE_URL" value="<%= typeof settings !== 'undefined' && settings.APP_BASE_URL ? settings.APP_BASE_URL : '' %>" required>
+                <input type="text" class="form-control" id="APP_BASE_URL" name="APP_BASE_URL" value="<%= (typeof formData !== 'undefined' && formData.APP_BASE_URL) ? formData.APP_BASE_URL : (typeof settings !== 'undefined' && settings.APP_BASE_URL ? settings.APP_BASE_URL : '') %>" required>
                 <div class="form-text">The full public URL where this application will be accessible (e.g., http://localhost:3000 or https://myapp.example.com). This is crucial for generating correct callback URLs for OAuth.</div>
             </div>
 
             <div class="mb-3">
                 <label for="SESSION_SECRET" class="form-label">Session Secret</label>
-                <input type="text" class="form-control" id="SESSION_SECRET" name="SESSION_SECRET" value="<%= typeof settings !== 'undefined' && settings.FLASK_APP_SECRET_KEY ? settings.FLASK_APP_SECRET_KEY : '' %>" readonly>
+                <input type="text" class="form-control" id="SESSION_SECRET" name="SESSION_SECRET" value="<%= (typeof formData !== 'undefined' && formData.SESSION_SECRET) ? formData.SESSION_SECRET : (typeof settings !== 'undefined' && settings.SESSION_SECRET ? settings.SESSION_SECRET : '') %>" readonly>
                 <div class="form-text">
                     This is your application's session secret. It has been auto-generated for this setup.
                     <strong>If you are re-configuring, ensure this matches your existing secret if you don't want to invalidate current sessions.</strong>
@@ -48,18 +48,18 @@
             <p>These settings are required to connect to your OPNsense firewall API. If you don't plan to use OPNsense integration, you can leave these blank for now, but features related to firewall rule management will be disabled.</p>
             <div class="mb-3">
                 <label for="OPNSENSE_BASE_URL" class="form-label">OPNsense Base URL</label>
-                <input type="text" class="form-control" id="OPNSENSE_BASE_URL" name="OPNSENSE_BASE_URL" value="<%= typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL ? settings.OPNSENSE_BASE_URL : '' %>">
+                <input type="text" class="form-control" id="OPNSENSE_BASE_URL" name="OPNSENSE_BASE_URL" value="<%= (typeof formData !== 'undefined' && formData.OPNSENSE_BASE_URL) ? formData.OPNSENSE_BASE_URL : (typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL ? settings.OPNSENSE_BASE_URL : '') %>">
                 <div class="form-text">The base URL of your OPNsense firewall (e.g., https://opnsense.example.com).</div>
             </div>
 
             <div class="mb-3">
                 <label for="OPNSENSE_API_KEY" class="form-label">OPNsense API Key</label>
-                <input type="text" class="form-control" id="OPNSENSE_API_KEY" name="OPNSENSE_API_KEY" value="<%= typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY ? settings.OPNSENSE_API_KEY : '' %>">
+                <input type="text" class="form-control" id="OPNSENSE_API_KEY" name="OPNSENSE_API_KEY" value="<%= (typeof formData !== 'undefined' && formData.OPNSENSE_API_KEY) ? formData.OPNSENSE_API_KEY : (typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY ? settings.OPNSENSE_API_KEY : '') %>">
             </div>
 
             <div class="mb-3">
                 <label for="OPNSENSE_API_SECRET" class="form-label">OPNsense API Secret</label>
-                <input type="password" class="form-control" id="OPNSENSE_API_SECRET" name="OPNSENSE_API_SECRET" value="">
+                <input type="password" class="form-control" id="OPNSENSE_API_SECRET" name="OPNSENSE_API_SECRET" value="<%= (typeof formData !== 'undefined' && formData.OPNSENSE_API_SECRET) ? formData.OPNSENSE_API_SECRET : '' %>">
                 <div class="form-text">Enter the API Secret. It will be stored securely. Leave blank if not changing.</div>
             </div>
         </fieldset>
@@ -69,12 +69,12 @@
             <p>These settings are required for Google OAuth 2.0 login. If you don't configure these, user login via Google will be disabled.</p>
             <div class="mb-3">
                 <label for="GOOGLE_CLIENT_ID" class="form-label">Google Client ID</label>
-                <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" value="<%= typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID ? settings.GOOGLE_CLIENT_ID : '' %>">
+                <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" value="<%= (typeof formData !== 'undefined' && formData.GOOGLE_CLIENT_ID) ? formData.GOOGLE_CLIENT_ID : (typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID ? settings.GOOGLE_CLIENT_ID : '') %>">
             </div>
 
             <div class="mb-3">
                 <label for="GOOGLE_CLIENT_SECRET" class="form-label">Google Client Secret</label>
-                <input type="password" class="form-control" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" value="">
+                <input type="password" class="form-control" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" value="<%= (typeof formData !== 'undefined' && formData.GOOGLE_CLIENT_SECRET) ? formData.GOOGLE_CLIENT_SECRET : '' %>">
                 <div class="form-text">Enter the Google Client Secret. It will be stored securely. Leave blank if not changing.</div>
             </div>
         </fieldset>

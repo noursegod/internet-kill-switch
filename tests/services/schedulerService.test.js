@@ -5,22 +5,39 @@ const nodeCron = require('node-cron'); // Mock this
 
 jest.mock('../../db/database', () => ({
     getAllActiveSchedules: jest.fn(),
-    getManagedRuleByUuid: jest.fn(), // For fetching rule details if needed by job logic
+    getManagedRuleByUuid: jest.fn(),
     updateManagedRuleTimer: jest.fn(),
     updateManagedRuleDesiredState: jest.fn(),
     updateScheduleLastTriggered: jest.fn(),
-    getExpiredTimerRules: jest.fn(), // For timer processing part
+    getExpiredTimerRules: jest.fn(),
+    updateSchedule: jest.fn(), // Added missing mock for updateSchedule
 }));
 
-jest.mock('../../services/opnsenseService'); // Mock the entire class
+jest.mock('../../services/opnsenseService');
 
-jest.mock('node-cron', () => ({
-    schedule: jest.fn((cronTime, func, options) => ({ // Mock schedule to return a job object
-        start: jest.fn(), // Mock job.start() if you call it (default is auto-start)
-        stop: jest.fn(),  // Mock job.stop()
-    })),
-    validate: jest.fn().mockReturnValue(true), // Assume cron expressions are valid by default
-}));
+// Store captured cron functions for testing
+const capturedCronCallbacks = new Map();
+
+jest.mock('node-cron', () => {
+    const originalNodeCron = jest.requireActual('node-cron');
+    return {
+        ...originalNodeCron,
+        validate: jest.fn(expr => typeof expr === 'string' && expr.length > 0), // Basic validation
+        schedule: jest.fn((cronExpression, func, options) => {
+            // Store the callback function using its cron expression as a key.
+            // If multiple jobs have the same expression, the last one scheduled will be stored.
+            // For tests, ensure unique expressions if testing multiple distinct jobs simultaneously,
+            // or retrieve based on call order if necessary.
+            capturedCronCallbacks.set(cronExpression, func);
+            
+            // Return a mock job object
+            return {
+                start: jest.fn(),
+                stop: jest.fn(),
+            };
+        }),
+    };
+});
 
 describe('Scheduler Service', () => {
     let mockOpnsenseInstance;
@@ -28,8 +45,11 @@ describe('Scheduler Service', () => {
     beforeEach(() => {
         // Reset all mocks
         Object.values(db).forEach(mockFn => mockFn.mockReset());
-        nodeCron.schedule.mockClear();
-        nodeCron.validate.mockClear().mockReturnValue(true); // Reset and keep default as valid
+        
+        // Clear captured cron jobs and mock call counts
+        capturedCronCallbacks.clear();
+        if (nodeCron.schedule.mockClear) nodeCron.schedule.mockClear(); // handle if not jest.fn() directly
+        if (nodeCron.validate.mockClear) nodeCron.validate.mockClear().mockReturnValue(true);
         
         // Clear the activeJobs object in the actual module (if possible and safe)
         // This is a bit of a hack, better if schedulerService had a reset method
@@ -243,35 +263,21 @@ describe('Scheduler Service', () => {
     });
 
     describe('Timer Processing Job (startTimerProcessingJob and processExpiredRuleTimer)', () => {
-        let timerProcessingFunction;
+        // No specific timerProcessingFunction variable needed here anymore, retrieve from capturedCronCallbacks
         
         beforeEach(() => {
-            nodeCron.schedule.mockImplementation((cron, func, options) => {
-                if (options && options.id === '__timerProcessor') { // Check if it's the timer job
-                     timerProcessingFunction = func;
-                }
-                return { stop: jest.fn(), start: jest.fn() };
-            });
-            // Call loadAndScheduleAllActiveJobs to ensure startTimerProcessingJob is called
-            db.getAllActiveSchedules.mockResolvedValue([]); // No rule schedules for this part
-            schedulerService.loadAndScheduleAllActiveJobs(); 
+            // Reset relevant mocks for timer tests
+            db.getExpiredTimerRules.mockReset();
+            db.updateManagedRuleDesiredState.mockReset();
+            db.updateManagedRuleTimer.mockReset();
             
-            // Ensure timerProcessingFunction is captured
-            if (!timerProcessingFunction) {
-                // Fallback if previous call didn't capture it (e.g. if no OPNsense schedules)
-                // This explicitly calls startTimerProcessingJob to ensure the cron job is set up
-                // and its function can be captured.
-                schedulerService.startTimerProcessingJob();
-                if (nodeCron.schedule.mock.calls.length > 0) {
-                    const lastCall = nodeCron.schedule.mock.calls[nodeCron.schedule.mock.calls.length - 1];
-                    if (lastCall[2] && lastCall[2].id === '__timerProcessor') {
-                         timerProcessingFunction = lastCall[1];
-                    }
-                }
-                if (!timerProcessingFunction) {
-                    throw new Error("Timer processing function not captured from nodeCron.schedule mock.");
-                }
+            OpnsenseService.mockClear(); 
+            if (mockOpnsenseInstance) { // Ensure mockOpnsenseInstance is defined from outer scope
+                if(mockOpnsenseInstance.enableRule) mockOpnsenseInstance.enableRule.mockReset();
+                if(mockOpnsenseInstance.disableRule) mockOpnsenseInstance.disableRule.mockReset();
             }
+            // The main beforeEach for 'Scheduler Service' already clears capturedCronCallbacks
+            // and nodeCron.schedule.mockClear().
         });
 
         test('timer processing job should process expired timers', async () => {
@@ -279,12 +285,21 @@ describe('Scheduler Service', () => {
                 id: 20, 
                 opnsense_rule_uuid: 'expired-uuid', 
                 user_id: 1, 
-                desired_state: true, // Was enabled by timer
+                desired_state: true, 
                 timer_action_on_expiry: 'disable' 
             };
             db.getExpiredTimerRules.mockResolvedValue([expiredRule]);
             
-            await timerProcessingFunction(); // Manually invoke the job's function
+            // Ensure OpnsenseService is mocked to return a working instance for this test
+            OpnsenseService.mockImplementation(() => mockOpnsenseInstance);
+
+            schedulerService.startTimerProcessingJob(); // This will schedule the job using the mocked nodeCron.schedule
+            
+            const timerFunc = capturedCronCallbacks.get('* * * * *'); // Retrieve by cron expression
+            if (!timerFunc) {
+                throw new Error("Timer processing function ('* * * * *') not captured.");
+            }
+            await timerFunc(); // Manually invoke the job's function
 
             expect(db.getExpiredTimerRules).toHaveBeenCalled();
             expect(mockOpnsenseInstance.disableRule).toHaveBeenCalledWith(expiredRule.opnsense_rule_uuid);
@@ -303,7 +318,15 @@ describe('Scheduler Service', () => {
         
         test('timer processing job should do nothing if no expired timers', async () => {
             db.getExpiredTimerRules.mockResolvedValue([]);
-            await timerProcessingFunction();
+            OpnsenseService.mockImplementation(() => mockOpnsenseInstance);
+
+            schedulerService.startTimerProcessingJob();
+            const timerFunc = capturedCronCallbacks.get('* * * * *');
+            if (!timerFunc) throw new Error("Timer processing function not captured.");
+            
+            await timerFunc();
+
+            expect(db.getExpiredTimerRules).toHaveBeenCalledTimes(1); // Still checks
             expect(mockOpnsenseInstance.disableRule).not.toHaveBeenCalled();
             expect(mockOpnsenseInstance.enableRule).not.toHaveBeenCalled();
         });
@@ -311,12 +334,18 @@ describe('Scheduler Service', () => {
         test('timer processing job should handle OPNsense API failure gracefully', async () => {
             const expiredRule = { id: 21, opnsense_rule_uuid: 'expired-fail-uuid', user_id: 1, timer_action_on_expiry: 'enable', desired_state: false };
             db.getExpiredTimerRules.mockResolvedValue([expiredRule]);
-            mockOpnsenseInstance.enableRule.mockResolvedValue(false); // Simulate OPNsense failure
+            
+            // Ensure OpnsenseService mock is correctly set up to simulate failure for this test
+            mockOpnsenseInstance.enableRule.mockResolvedValue(false); 
+            OpnsenseService.mockImplementation(() => mockOpnsenseInstance);
+            
+            schedulerService.startTimerProcessingJob();
+            const timerFunc = capturedCronCallbacks.get('* * * * *');
+            if (!timerFunc) throw new Error("Timer processing function not captured.");
 
-            await timerProcessingFunction();
+            await timerFunc();
             
             expect(mockOpnsenseInstance.enableRule).toHaveBeenCalledWith(expiredRule.opnsense_rule_uuid);
-            // DB should NOT be updated if OPNsense action failed
             expect(db.updateManagedRuleDesiredState).not.toHaveBeenCalled();
             expect(db.updateManagedRuleTimer).not.toHaveBeenCalled();
         });

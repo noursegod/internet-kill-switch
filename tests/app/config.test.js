@@ -3,30 +3,69 @@ const crypto = require('crypto');
 // Mock the database module
 jest.mock('../../db/database', () => ({
     getSetting: jest.fn(),
-    getAllSettings: jest.fn(),
-    initializeDatabase: jest.fn(), // Mock initializeDatabase as it's called early in app.js
+    getAllSettings: jest.fn(() => ({})), // Default mock for app.js loading
+    initializeDatabase: jest.fn(),
 }));
 
-// Mock crypto.randomBytes
-jest.mock('crypto', () => ({
-    ...jest.requireActual('crypto'), // Import and retain default behavior
-    randomBytes: jest.fn(),
-}));
+// Define a constant for the crypto mock to use, ensuring it's a valid hex string of appropriate length
+const PREDEFINED_HEX_FOR_CRYPTO_MOCK = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"; // 64 hex chars
+
+jest.mock('crypto', () => {
+    const originalCrypto = jest.requireActual('crypto');
+    return {
+        ...originalCrypto,
+        randomBytes: jest.fn((size) => {
+            if (size === 64) {
+                // Return an object that mimics Buffer's toString('hex') behavior
+                return {
+                    toString: (encoding) => {
+                        if (encoding === 'hex') {
+                            return PREDEFINED_HEX_FOR_CRYPTO_MOCK;
+                        }
+                        // Fallback for other encodings if necessary
+                        return Buffer.from(PREDEFINED_HEX_FOR_CRYPTO_MOCK, 'hex').toString(encoding || undefined);
+                    }
+                };
+            }
+            return originalCrypto.randomBytes(size); // Fallback for other sizes
+        }),
+    };
+});
 
 
 // Helper function to simulate the SESSION_SECRET prioritization logic from app.js
 // This isolates the logic for testing.
 const determineSessionSecret = (envSecret, dbSecret, isDbSetupComplete, defaultPlaceholder, generatedCryptoKey) => {
     let generatedTestSecret = null;
-    if (!envSecret && !(isDbSetupComplete && dbSecret)) {
-        if (!envSecret || envSecret === defaultPlaceholder) {
-            if (!(isDbSetupComplete && dbSecret)) {
-                generatedTestSecret = generatedCryptoKey; // Simulate crypto generation
-            }
-        }
+
+    // Condition for generation:
+    // (envSecret is undefined/null/empty OR envSecret is the placeholder)
+    // AND
+    // (dbSecret is undefined/null/empty OR setup is not complete for db check)
+    const envIsEffectivelyUnset = (!envSecret || envSecret === defaultPlaceholder);
+    const dbIsEffectivelyUnset = (!dbSecret || !isDbSetupComplete);
+
+    if (envIsEffectivelyUnset && dbIsEffectivelyUnset) {
+        generatedTestSecret = generatedCryptoKey;
     }
-    return generatedTestSecret || (isDbSetupComplete && dbSecret) || envSecret || defaultPlaceholder;
+
+    // Priority: generated (if conditions met) -> DB (if setup complete) -> Env -> Placeholder
+    // The final return statement in app.js's config block handles this priority implicitly.
+    // This helper needs to return the determined secret based on this chain.
+    if (generatedTestSecret) {
+        return generatedTestSecret;
+    }
+    if (isDbSetupComplete && dbSecret) { // dbSecret takes precedence if setup is complete and secret exists
+        return dbSecret;
+    }
+    // If envSecret is set (and not placeholder, or it is placeholder but no generated/DB), it's used
+    if (envSecret) { 
+        return envSecret; 
+    }
+    // Fallback to placeholder if envSecret was also undefined/null
+    return defaultPlaceholder; 
 };
+
 
 // Helper function to simulate general config key prioritization
 const determineConfigValue = (dbValue, envValue, isDbSetupComplete, defaultValue) => {
@@ -42,16 +81,25 @@ const determineConfigValue = (dbValue, envValue, isDbSetupComplete, defaultValue
 
 describe('App Configuration Logic', () => {
     let app; // To hold the app instance if we load app.js
-    let mockDatabase;
+    let mockDatabase; // To hold the mocked database module
 
     const DEFAULT_PLACEHOLDER_TEST = "!!TEST_PLACEHOLDER!!";
-    const GENERATED_CRYPTO_KEY_TEST = "test_generated_crypto_key";
+    // GENERATED_CRYPTO_KEY_TEST should align with what the crypto mock provides
+    const GENERATED_CRYPTO_KEY_TEST = PREDEFINED_HEX_FOR_CRYPTO_MOCK; 
 
     beforeEach(() => {
-        // Reset mocks before each test
-        jest.resetModules(); // Important to reset modules if app.js is re-required
+        // Reset modules to ensure app.js is reloaded with fresh mocks for certain tests
+        jest.resetModules();
+        
+        // Re-acquire and re-configure mocks as jest.resetModules() clears them
         mockDatabase = require('../../db/database');
-        crypto.randomBytes.mockReturnValue(Buffer.from(GENERATED_CRYPTO_KEY_TEST, 'hex'));
+        // Default mock behaviors for db functions (can be overridden in specific tests)
+        mockDatabase.getSetting.mockImplementation(() => null); // Default to setup not complete
+        mockDatabase.getAllSettings.mockReturnValue({}); // Default to no DB settings
+
+        // The crypto mock is already set up via jest.mock at the top.
+        // If specific crypto behavior per test is needed, spyOn(crypto, 'randomBytes').mockReturnValue(...) here.
+        // For now, the global mock with PREDEFINED_HEX_FOR_CRYPTO_MOCK should be consistent.
         
         // Reset process.env, but save original
         process.env.ORIGINAL_NODE_ENV = process.env.NODE_ENV;
@@ -69,17 +117,22 @@ describe('App Configuration Logic', () => {
         jest.restoreAllMocks();
     });
 
-    describe('isInitialSetupComplete (simulated via app.js loading)', () => {
+    describe('isInitialSetupComplete (now explicitly exported for test)', () => {
+        let isInitialSetupCompleteForTest;
+
+        beforeEach(() => {
+            // app.js is re-required because of jest.resetModules() in the outer beforeEach
+            // This ensures we get the version of app.js with the export.
+            const appModule = require('../../app');
+            isInitialSetupCompleteForTest = appModule.isInitialSetupCompleteForTest;
+        });
+
         test('should return true if getSetting("initial_setup_complete") is "true"', () => {
             mockDatabase.getSetting.mockImplementation((key) => {
                 if (key === 'initial_setup_complete') return 'true';
                 return null;
             });
-            // Load app.js to make its global functions available, including isInitialSetupComplete
-            // This is tricky because app.js has side effects (like initializing DB, setting app.config)
-            // We are relying on the mocks to control these side effects.
-            app = require('../../app'); 
-            expect(app.isInitialSetupComplete()).toBe(true);
+            expect(isInitialSetupCompleteForTest()).toBe(true);
         });
 
         test('should return false if getSetting("initial_setup_complete") is "false"', () => {
@@ -87,8 +140,7 @@ describe('App Configuration Logic', () => {
                 if (key === 'initial_setup_complete') return 'false';
                 return null;
             });
-            app = require('../../app');
-            expect(app.isInitialSetupComplete()).toBe(false);
+            expect(isInitialSetupCompleteForTest()).toBe(false);
         });
 
         test('should return false if getSetting("initial_setup_complete") returns null', () => {
@@ -96,8 +148,7 @@ describe('App Configuration Logic', () => {
                 if (key === 'initial_setup_complete') return null;
                 return null;
             });
-            app = require('../../app');
-            expect(app.isInitialSetupComplete()).toBe(false);
+            expect(isInitialSetupCompleteForTest()).toBe(false);
         });
 
         test('should return false and log error if getSetting throws an error', () => {

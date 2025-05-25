@@ -29,7 +29,7 @@
                     <div class="mb-3">
                         <label for="APP_BASE_URL" class="form-label">Application Base URL</label>
                         <input type="text" class="form-control" id="APP_BASE_URL" name="APP_BASE_URL" 
-                               value="<%= (typeof settings !== 'undefined' && settings.APP_BASE_URL && settings.APP_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.APP_BASE_URL : '' %>" 
+                               value="<%= (typeof formData !== 'undefined' && formData.APP_BASE_URL) ? formData.APP_BASE_URL : ((typeof settings !== 'undefined' && settings.APP_BASE_URL && settings.APP_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.APP_BASE_URL : '') %>" 
                                required>
                         <div class="form-text">The full public URL where this application is accessible (e.g., http://localhost:3000 or https://myapp.example.com). Critical for OAuth callbacks.</div>
                     </div>
@@ -37,10 +37,10 @@
                     <div class="mb-3">
                         <label class="form-label">Session Secret</label>
                         <p class="form-control-static">
-                            <% if (typeof settings !== 'undefined' && settings.FLASK_APP_SECRET_KEY && settings.FLASK_APP_SECRET_KEY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') { %>
-                                Currently Set.
+                            <% if (typeof settings !== 'undefined' && settings.SESSION_SECRET_DISPLAY && settings.SESSION_SECRET_DISPLAY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') { %>
+                                <%= settings.SESSION_SECRET_STATUS_MESSAGE || 'Currently Set.' %>
                             <% } else { %>
-                                <span class="text-danger"><strong>Not Set or Using Default Placeholder! This is a security risk.</strong></span>
+                                <span class="text-danger"><strong>Not Set or Using Default Placeholder! This is a security risk. Set via Environment.</strong></span>
                             <% } %>
                         </p>
                         <div class="form-text alert alert-warning">
@@ -60,14 +60,14 @@
                     <div class="mb-3">
                         <label for="OPNSENSE_BASE_URL" class="form-label">OPNsense Base URL</label>
                         <input type="text" class="form-control" id="OPNSENSE_BASE_URL" name="OPNSENSE_BASE_URL" 
-                               value="<%= (typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL && settings.OPNSENSE_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_BASE_URL : '' %>">
+                               value="<%= (typeof formData !== 'undefined' && formData.OPNSENSE_BASE_URL) ? formData.OPNSENSE_BASE_URL : ((typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL && settings.OPNSENSE_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_BASE_URL : '') %>">
                         <div class="form-text">E.g., https://opnsense.example.com</div>
                     </div>
 
                     <div class="mb-3">
                         <label for="OPNSENSE_API_KEY" class="form-label">OPNsense API Key</label>
                         <input type="text" class="form-control" id="OPNSENSE_API_KEY" name="OPNSENSE_API_KEY" 
-                               value="<%= (typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY && settings.OPNSENSE_API_KEY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_API_KEY : '' %>">
+                               value="<%= (typeof formData !== 'undefined' && formData.OPNSENSE_API_KEY) ? formData.OPNSENSE_API_KEY : ((typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY && settings.OPNSENSE_API_KEY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_API_KEY : '') %>">
                     </div>
 
                     <div class="mb-3">
@@ -75,10 +75,11 @@
                         <% if (typeof settings !== 'undefined' && settings.OPNSENSE_API_SECRET_IS_SET) { %>
                             <p class="form-control-static text-success">Currently Set. Replace by entering a new secret below.</p>
                         <% } else { %>
-                            <p class="form-control-static text-warning">Not Set or using placeholder. Please provide the secret below if OPNsense integration is desired.</p>
+                            <p class="form-control-static text-warning">Not Set. Please provide the secret below if OPNsense integration is desired.</p>
                         <% } %>
                         <input type="password" class="form-control" id="NEW_OPNSENSE_API_SECRET" name="NEW_OPNSENSE_API_SECRET" 
-                               placeholder="Enter new OPNsense API Secret (leave blank to keep current)">
+                               placeholder="Enter new OPNsense API Secret (leave blank to keep current)"
+                               value="<%= (typeof formData !== 'undefined' && formData.NEW_OPNSENSE_API_SECRET) ? formData.NEW_OPNSENSE_API_SECRET : '' %>">
                         <div class="form-text">This value is write-only. It will be saved securely.</div>
                     </div>
                 </fieldset>
@@ -90,7 +91,7 @@
                     <div class="mb-3">
                         <label for="GOOGLE_CLIENT_ID" class="form-label">Google Client ID</label>
                         <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" 
-                               value="<%= (typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID && settings.GOOGLE_CLIENT_ID !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.GOOGLE_CLIENT_ID : '' %>">
+                               value="<%= (typeof formData !== 'undefined' && formData.GOOGLE_CLIENT_ID) ? formData.GOOGLE_CLIENT_ID : ((typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID && settings.GOOGLE_CLIENT_ID !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.GOOGLE_CLIENT_ID : '') %>">
                     </div>
 
                     <div class="mb-3">
@@ -98,10 +99,11 @@
                         <% if (typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_SECRET_IS_SET) { %>
                             <p class="form-control-static text-success">Currently Set. Replace by entering a new secret below.</p>
                         <% } else { %>
-                            <p class="form-control-static text-warning">Not Set or using placeholder. Please provide the secret below if Google OAuth is desired.</p>
+                            <p class="form-control-static text-warning">Not Set. Please provide the secret below if Google OAuth is desired.</p>
                         <% } %>
                         <input type="password" class="form-control" id="NEW_GOOGLE_CLIENT_SECRET" name="NEW_GOOGLE_CLIENT_SECRET" 
-                               placeholder="Enter new Google Client Secret (leave blank to keep current)">
+                               placeholder="Enter new Google Client Secret (leave blank to keep current)"
+                               value="<%= (typeof formData !== 'undefined' && formData.NEW_GOOGLE_CLIENT_SECRET) ? formData.NEW_GOOGLE_CLIENT_SECRET : '' %>">
                         <div class="form-text">This value is write-only. It will be saved securely.</div>
                     </div>
                 </fieldset>

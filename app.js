@@ -4,7 +4,6 @@ const dotenv = require('dotenv');
 const path = require('path'); // Required for path.join
 const session = require('express-session');
 const passport = require('passport');
-// const flash = require('connect-flash'); // Optional: for flash messages
 
 // Load environment variables from .env file
 dotenv.config();
@@ -85,7 +84,7 @@ app.config = {
     // 2. Database (if setup complete)
     // 3. Environment variable
     // 4. Default placeholder
-    FLASK_APP_SECRET_KEY: generatedSessionSecret || 
+    SESSION_SECRET: generatedSessionSecret || 
                            (setupComplete && dbSettings.SESSION_SECRET) || 
                            process.env.SESSION_SECRET || 
                            DEFAULT_PLACEHOLDER,
@@ -132,19 +131,29 @@ app.config = {
 
 // Apply critical configurations directly
 app.set('trust proxy', 1) // Trust first proxy, important for secure cookies if behind a reverse proxy like Nginx/Heroku
-app.secret = app.config.FLASK_APP_SECRET_KEY; // For express-session secret (used app.config for consistency)
+app.secret = app.config.SESSION_SECRET; // For express-session secret (used app.config for consistency)
 
 // --- Startup Configuration Checks & Logging ---
 console.log("--- Application Configuration Status ---");
-if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && !generatedSessionSecret) { // Check if still placeholder AND no secret was generated
+if (app.config.SESSION_SECRET === DEFAULT_PLACEHOLDER && !generatedSessionSecret) { // Check if still placeholder AND no secret was generated
     console.error("CRITICAL: SESSION_SECRET is not set and could not be auto-generated. Application will not run securely. Please set this environment variable.");
     // process.exit(1); // Potentially exit if not allowing setup without it
-} else if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && generatedSessionSecret) {
+} else if (app.config.SESSION_SECRET === DEFAULT_PLACEHOLDER && generatedSessionSecret) {
     console.warn("WARNING: SESSION_SECRET is using a temporarily generated value. Please complete the initial setup to persist it.");
-} else if (generatedSessionSecret && app.config.FLASK_APP_SECRET_KEY !== generatedSessionSecret) {
-    console.info("INFO: SESSION_SECRET is set from environment variables. The auto-generated secret will not be used.");
-} else if (!generatedSessionSecret) {
-    console.info("INFO: SESSION_SECRET is loaded from environment variables.");
+} else if (generatedSessionSecret && app.config.SESSION_SECRET !== generatedSessionSecret) {
+    // This case means an environment variable SESSION_SECRET was provided, and it's different from a generated one.
+    // The generated one would only exist if the env var was missing or placeholder initially.
+    // If app.config.SESSION_SECRET is now the env var, this comparison needs care.
+    // The logic in app.config already prioritizes: generated || db || env.
+    // So if generatedSessionSecret exists, it means it was used or db/env were missing.
+    // If app.config.SESSION_SECRET is NOT generatedSessionSecret, it means it came from DB or ENV.
+    console.info("INFO: SESSION_SECRET is loaded from Database or Environment. Auto-generated secret (if any) was not used or was overridden.");
+} else if (!generatedSessionSecret && app.config.SESSION_SECRET !== DEFAULT_PLACEHOLDER) {
+    // No secret was generated (meaning ENV or DB was available or ENV was not placeholder initially), and the loaded one is not the placeholder.
+    console.info("INFO: SESSION_SECRET is loaded from Database or Environment variables.");
+} else if (app.config.SESSION_SECRET !== DEFAULT_PLACEHOLDER) {
+    // This covers the case where generatedSessionSecret was used and is not the placeholder
+    console.info("INFO: SESSION_SECRET is using an auto-generated value.");
 }
 
 if (app.config.OPNSENSE_BASE_URL === DEFAULT_PLACEHOLDER) {
@@ -170,7 +179,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
 app.use(session({
-    secret: app.config.FLASK_APP_SECRET_KEY, // Use the same secret key
+    secret: app.config.SESSION_SECRET, // Use the same secret key
     resave: false,
     saveUninitialized: true, // True to store invitation code in session for anonymous users
     cookie: {
@@ -179,9 +188,6 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-
-// Optional: connect-flash for flash messages
-// app.use(flash()); // Initialize flash after session
 
 // Initialize Passport
 initializePassport(app); // Pass app if passport config needs it (e.g. for app.config)
@@ -223,8 +229,8 @@ app.set('views', path.join(__dirname, 'views'));
 
 
 // --- Configuration Status Helper Functions (made available via context processor/middleware) ---
-function isAppSecretKeyProperlySet() {
-    return app.config.FLASK_APP_SECRET_KEY !== DEFAULT_PLACEHOLDER;
+function isSessionSecretProperlySet() { // Renamed function for clarity
+    return app.config.SESSION_SECRET !== DEFAULT_PLACEHOLDER;
 }
 function isOpnsenseFullyConfigured() {
     return app.config.OPNSENSE_API_KEY !== DEFAULT_PLACEHOLDER &&
@@ -242,12 +248,10 @@ app.use((req, res, next) => {
     res.locals.currentPath = req.path;
     
     // Config status for templates
-    res.locals.is_app_secret_key_configured = isAppSecretKeyProperlySet();
+    res.locals.is_app_secret_key_configured = isSessionSecretProperlySet(); // Updated to use renamed function
     res.locals.is_opnsense_fully_configured = isOpnsenseFullyConfigured();
     res.locals.is_google_oauth_configured = isGoogleOauthConfigured();
 
-    // Flash messages (if using connect-flash)
-    // res.locals.flashMessages = req.flash(); 
     // Fallback for query param messages (if connect-flash not used)
     res.locals.queryMessages = {};
     if (req.query.error) res.locals.queryMessages.error = req.query.error;
@@ -284,20 +288,19 @@ app.use('/', uiRoutes); // Should be last for general paths like '/'
 async function startServer() {
     try {
         // Allow startup if a secret was generated (pending setup completion) 
-        // or if it's set directly in env and not the placeholder.
-        const isSecretOkayForStartup = (generatedSessionSecret || (app.config.FLASK_APP_SECRET_KEY !== DEFAULT_PLACEHOLDER));
+        // or if it's set directly in env/db and not the placeholder.
+        const isSecretOkayForStartup = (app.config.SESSION_SECRET !== DEFAULT_PLACEHOLDER);
 
         if (!isSecretOkayForStartup && process.env.NODE_ENV !== 'test') {
-            console.error("FATAL: SESSION_SECRET is not set and was not auto-generated. The application cannot start.");
-            console.error("Please set SESSION_SECRET in your environment variables or ensure it can be generated.");
+            // This condition implies the final app.config.SESSION_SECRET is still the placeholder.
+            // This should only happen if generation failed AND env/DB were also placeholders or missing.
+            console.error("FATAL: SESSION_SECRET is not set (still default placeholder after all checks/generation attempts). The application cannot start securely.");
+            console.error("Please set SESSION_SECRET in your environment variables or ensure it's configured in the database and setup is marked complete, or check generation logic.");
             process.exit(1);
         }
-        if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && generatedSessionSecret && process.env.NODE_ENV !== 'test' && !setupComplete) {
-            console.warn("WARNING: Application starting with a TEMPORARY SESSION_SECRET (auto-generated). Please complete the setup process to persist it or set it in environment.");
-        } else if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && !generatedSessionSecret) {
-             console.error("FATAL: SESSION_SECRET is not set and was not auto-generated (e.g. DB value exists, or env value exists but is placeholder). The application cannot start securely.");
-             console.error("Please set SESSION_SECRET in your environment variables or ensure it's configured in the database and setup is marked complete.");
-             process.exit(1);
+        // Specific warning if using a generated secret AND setup is not yet complete.
+        if (generatedSessionSecret && app.config.SESSION_SECRET === generatedSessionSecret && !setupComplete && process.env.NODE_ENV !== 'test') {
+            console.warn("WARNING: Application starting with a TEMPORARY, auto-generated SESSION_SECRET. Please complete the setup process to persist it.");
         }
 
 
@@ -336,3 +339,5 @@ if (require.main === module) { // Ensure this block runs only when app.js is exe
 }
 
 module.exports = app; // For potential testing
+// Export for testing purposes
+module.exports.isInitialSetupCompleteForTest = isInitialSetupComplete;

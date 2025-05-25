@@ -4,11 +4,9 @@ const path = require('path');
 
 // Determine the database path. Prioritize environment variable, then default.
 // Ensure the path is absolute or correctly relative to the project root.
-const dbDirectory = path.resolve(__dirname, '../../instance'); // Create an 'instance' folder at project root for DB
-if (!fs.existsSync(dbDirectory)) {
-    fs.mkdirSync(dbDirectory, { recursive: true });
-}
-const DATABASE_PATH = process.env.DATABASE_PATH || path.join(dbDirectory, 'opnsense_controller.sqlite');
+// Default database path definition (can still use a resolved path for the default)
+const defaultDbPath = path.join(path.resolve(__dirname, '../../instance'), 'opnsense_controller.sqlite');
+const DATABASE_PATH = process.env.DATABASE_PATH || defaultDbPath;
 
 let dbInstance = null;
 
@@ -17,13 +15,30 @@ function initializeDatabase() {
         return dbInstance;
     }
 
-    const dbExists = fs.existsSync(DATABASE_PATH);
+    // Directory creation logic moved here and made conditional
+    if (DATABASE_PATH !== ':memory:') {
+        const resolvedDbDirectory = path.dirname(DATABASE_PATH);
+        if (!fs.existsSync(resolvedDbDirectory)) {
+            try {
+                fs.mkdirSync(resolvedDbDirectory, { recursive: true });
+                console.log(`INFO: Created database directory: ${resolvedDbDirectory}`);
+            } catch (mkdirError) {
+                console.error(`FATAL: Could not create database directory ${resolvedDbDirectory}:`, mkdirError);
+                process.exit(1); // Exit if directory creation fails for a non-memory DB
+            }
+        }
+    }
+
+    // For in-memory DB, dbExists will be false, leading to schema application, which is correct.
+    // For file DB, it checks actual file existence.
+    const dbExists = (DATABASE_PATH === ':memory:') ? false : fs.existsSync(DATABASE_PATH);
+
 
     try {
         console.log(`Attempting to connect to database at: ${DATABASE_PATH}`);
         const db = new Database(DATABASE_PATH, { verbose: console.log });
 
-        if (!dbExists) {
+        if (!dbExists) { // This condition now correctly handles both new file DBs and new in-memory DBs
             console.log("Database file does not exist. Creating and applying schema...");
             const schemaSQLPath = path.join(__dirname, 'schema.sql');
             if (!fs.existsSync(schemaSQLPath)) {
