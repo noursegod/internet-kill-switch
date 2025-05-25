@@ -1,0 +1,123 @@
+<%- include('partials/_navbar', { currentPath: '/admin/settings' }) %>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <h1>Admin: Application Settings</h1>
+            <p class="lead">
+                Manage core application settings here. Be cautious when changing these values, especially secrets.
+            </p>
+
+            <%- include('partials/_flash_messages') %>
+            <% if (typeof queryMessages !== 'undefined' && queryMessages.error) { %>
+                <div class="alert alert-danger"><%= queryMessages.error %></div>
+            <% } %>
+            <% if (typeof queryMessages !== 'undefined' && queryMessages.message) { %>
+                <div class="alert alert-info"><%= queryMessages.message %></div>
+            <% } %>
+            <% if (typeof sessionFlashMessages !== 'undefined' && sessionFlashMessages.error) { %>
+                <div class="alert alert-danger"><%= sessionFlashMessages.error %></div>
+              <% } %>
+            <% if (typeof sessionFlashMessages !== 'undefined' && sessionFlashMessages.success) { %>
+                <div class="alert alert-success"><%= sessionFlashMessages.success %></div>
+            <% } %>
+
+            <form method="POST" action="/admin/settings" class="mt-4">
+                <fieldset>
+                    <legend>Core Application Configuration</legend>
+
+                    <div class="mb-3">
+                        <label for="APP_BASE_URL" class="form-label">Application Base URL</label>
+                        <input type="text" class="form-control" id="APP_BASE_URL" name="APP_BASE_URL" 
+                               value="<%= (typeof settings !== 'undefined' && settings.APP_BASE_URL && settings.APP_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.APP_BASE_URL : '' %>" 
+                               required>
+                        <div class="form-text">The full public URL where this application is accessible (e.g., http://localhost:3000 or https://myapp.example.com). Critical for OAuth callbacks.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Session Secret</label>
+                        <p class="form-control-static">
+                            <% if (typeof settings !== 'undefined' && settings.FLASK_APP_SECRET_KEY && settings.FLASK_APP_SECRET_KEY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') { %>
+                                Currently Set.
+                            <% } else { %>
+                                <span class="text-danger"><strong>Not Set or Using Default Placeholder! This is a security risk.</strong></span>
+                            <% } %>
+                        </p>
+                        <div class="form-text alert alert-warning">
+                            <strong>Important:</strong> The Session Secret is critical for application security. 
+                            To change it, you must update the <code>SESSION_SECRET</code> environment variable 
+                            (or the corresponding value in your <code>.env</code> file or secrets management system) 
+                            and then restart the application. Changing the secret will invalidate all current user sessions.
+                            This setting is not directly editable here to prevent accidental changes.
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="mt-4">
+                    <legend>OPNsense Firewall Integration</legend>
+                    <p>Settings for connecting to your OPNsense firewall API.</p>
+
+                    <div class="mb-3">
+                        <label for="OPNSENSE_BASE_URL" class="form-label">OPNsense Base URL</label>
+                        <input type="text" class="form-control" id="OPNSENSE_BASE_URL" name="OPNSENSE_BASE_URL" 
+                               value="<%= (typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL && settings.OPNSENSE_BASE_URL !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_BASE_URL : '' %>">
+                        <div class="form-text">E.g., https://opnsense.example.com</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="OPNSENSE_API_KEY" class="form-label">OPNsense API Key</label>
+                        <input type="text" class="form-control" id="OPNSENSE_API_KEY" name="OPNSENSE_API_KEY" 
+                               value="<%= (typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY && settings.OPNSENSE_API_KEY !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.OPNSENSE_API_KEY : '' %>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">OPNsense API Secret</label>
+                        <% if (typeof settings !== 'undefined' && settings.OPNSENSE_API_SECRET_IS_SET) { %>
+                            <p class="form-control-static text-success">Currently Set. Replace by entering a new secret below.</p>
+                        <% } else { %>
+                            <p class="form-control-static text-warning">Not Set or using placeholder. Please provide the secret below if OPNsense integration is desired.</p>
+                        <% } %>
+                        <input type="password" class="form-control" id="NEW_OPNSENSE_API_SECRET" name="NEW_OPNSENSE_API_SECRET" 
+                               placeholder="Enter new OPNsense API Secret (leave blank to keep current)">
+                        <div class="form-text">This value is write-only. It will be saved securely.</div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="mt-4">
+                    <legend>Google OAuth Configuration</legend>
+                    <p>Settings for Google OAuth 2.0 login.</p>
+
+                    <div class="mb-3">
+                        <label for="GOOGLE_CLIENT_ID" class="form-label">Google Client ID</label>
+                        <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" 
+                               value="<%= (typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID && settings.GOOGLE_CLIENT_ID !== '!!MUST_BE_SET_IN_ENVIRONMENT!!') ? settings.GOOGLE_CLIENT_ID : '' %>">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Google Client Secret</label>
+                        <% if (typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_SECRET_IS_SET) { %>
+                            <p class="form-control-static text-success">Currently Set. Replace by entering a new secret below.</p>
+                        <% } else { %>
+                            <p class="form-control-static text-warning">Not Set or using placeholder. Please provide the secret below if Google OAuth is desired.</p>
+                        <% } %>
+                        <input type="password" class="form-control" id="NEW_GOOGLE_CLIENT_SECRET" name="NEW_GOOGLE_CLIENT_SECRET" 
+                               placeholder="Enter new Google Client Secret (leave blank to keep current)">
+                        <div class="form-text">This value is write-only. It will be saved securely.</div>
+                    </div>
+                </fieldset>
+                
+                <hr class="my-4">
+                
+                <p>
+                    <strong>Note on Secrets:</strong> For API secrets and client secrets, if you leave the "New..." field blank, 
+                    the existing stored secret will be retained. If a secret is not set and you leave it blank, it will remain unset.
+                </p>
+
+                <button type="submit" class="btn btn-primary btn-lg mb-3">Save Settings</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/_footer') %>
+<%- /* vim: set ft=html : */ -%>

@@ -52,29 +52,49 @@ Key features include:
 
 ## Configuration
 
-Configuration is managed exclusively through environment variables. A sample file `.env.example` is provided in the repository. Create a `.env` file based on this example or set the variables directly in your deployment environment.
+The application uses a combination of environment variables for initial setup and runtime configuration, and an in-application settings management system for ongoing adjustments after the first run.
 
-**Required Environment Variables:**
+### Initial Setup & Environment Variables
 
-*   `FLASK_APP_SECRET_KEY`: **CRITICAL** A strong, random string used for session security. **Must be set for production.**
-    *   Example: `FLASK_APP_SECRET_KEY="your_very_strong_random_secret_key_here"`
-*   `OPNSENSE_BASE_URL`: The base URL for your OPNsense API.
-    *   Example: `OPNSENSE_BASE_URL="https://192.168.1.1/api"`
-*   `OPNSENSE_API_KEY`: Your OPNsense API Key.
-*   `OPNSENSE_API_SECRET`: Your OPNsense API Secret.
-*   `GOOGLE_OAUTH_CLIENT_ID`: Your Google OAuth Client ID. Required for login.
-*   `GOOGLE_OAUTH_CLIENT_SECRET`: Your Google OAuth Client Secret. Required for login.
+For the initial launch and certain runtime behaviors, the following environment variables are important. A sample file `.env.example` is provided; copy this to `.env` and customize it for your environment:
 
-**Optional Environment Variables:**
+```bash
+cp .env.example .env
+```
 
-*   `DATABASE_URL`: The connection string for your database.
-    *   Default: `sqlite:///app.db` (creates a SQLite file named `app.db` in the `/app/instance` directory if using Docker volumes, or `/app` otherwise).
-    *   PostgreSQL Example: `DATABASE_URL="postgresql://user:password@hostname:port/database_name"`
-*   `FLASK_RUN_HOST`: The host the Flask development server binds to.
-    *   Default for Docker: `0.0.0.0` (set by `ENV FLASK_RUN_HOST 0.0.0.0` in Dockerfile).
-*   `FLASK_DEBUG`: Controls Flask's debug mode.
-    *   Set to `1` for development (enables reloader, debugger).
-    *   Set to `0` for production. (Default is typically off unless `FLASK_ENV=development`).
+**Key Environment Variables (Consult `.env.example` for a full list):**
+
+*   **Runtime & Deployment:**
+    *   `PORT`: The port the application will listen on (e.g., `3000`).
+    *   `NODE_ENV`: Set to `production` for production deployments, or `development` for development features.
+    *   `DATABASE_PATH`: Absolute path to the SQLite database file (e.g., `/app/instance/opnsense_controller.sqlite`). If not set, defaults to `instance/opnsense_controller.sqlite` relative to the project root. *For Docker, ensure this path is mapped to a persistent volume.*
+*   **Initial Admin User Designation:**
+    *   `ADMIN_USER_GOOGLE_ID`: The Google User ID (the numeric `sub` claim from Google) of the user who will become the first administrator upon their first login.
+*   **Initial Values for In-App Setup (Optional Seeding):**
+    *   The following variables can be set in `.env` to provide initial values for the Out-of-Box Experience (OOBE) setup wizard. If not set, they will need to be entered manually during the web-based setup:
+        *   `APP_BASE_URL`: The full public URL where the application will be accessible (e.g., `http://localhost:3000` or `https://myapp.example.com`).
+        *   `OPNSENSE_BASE_URL`: The base URL for your OPNsense API (e.g., `https://opnsense.example.com/api`).
+        *   `OPNSENSE_API_KEY`: Your OPNsense API Key.
+        *   `OPNSENSE_API_SECRET`: Your OPNsense API Secret.
+        *   `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
+        *   `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret.
+        *   `SESSION_SECRET`: A strong, random string for session security.
+
+### In-Application Configuration & Out-of-Box Experience (OOBE)
+
+Upon the first run, if critical settings are missing or the application has not been marked as "setup complete," the first designated admin user (matching `ADMIN_USER_GOOGLE_ID`) will be guided through a web-based setup wizard (`/setup`).
+
+*   **Settings Managed In-App:**
+    *   `APP_BASE_URL`
+    *   `OPNSENSE_BASE_URL`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`
+    *   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+    *   `SESSION_SECRET`
+*   **`SESSION_SECRET` Handling:**
+    *   If `SESSION_SECRET` is present in your `.env` file during the very first application startup, it will be used as the initial value for the setup page.
+    *   If `SESSION_SECRET` is **not** set in `.env` (or is set to the default placeholder) during the first startup, a cryptographically strong secret will be **auto-generated**.
+    *   This secret (either from `.env` or auto-generated) is then displayed on the setup page and subsequently stored securely in the application's database once the setup is completed.
+    *   After the initial setup, the `SESSION_SECRET` stored in the database takes precedence. Changes to the `.env` file for `SESSION_SECRET` will not automatically apply unless the database setting is cleared or the application's configuration loading is manually reset (which is not a standard feature).
+*   **Administrative Management:** After initial setup, an administrator can modify these settings under `/admin/settings` in the web UI. Some changes (like `APP_BASE_URL` or OAuth credentials) may require an application restart to take full effect.
 
 ## Getting Started / Installation & Running
 
@@ -89,32 +109,62 @@ Configuration is managed exclusively through environment variables. A sample fil
         ```bash
         cp .env.example .env
         ```
-    *   Edit the `.env` file and fill in your specific values for all required variables.
+    *   Edit the `.env` file. Pay special attention to `PORT`, `NODE_ENV`, `DATABASE_PATH`, and `ADMIN_USER_GOOGLE_ID`.
+    *   Other variables like OPNsense credentials, Google OAuth details, `APP_BASE_URL`, and `SESSION_SECRET` can be set in `.env` to pre-fill the setup wizard, or they can be entered directly via the web UI during the first setup.
 
 3.  **Build and Run using Docker:**
     *   Build the Docker image:
         ```bash
         docker build -t opnsense-rule-controller .
         ```
-    *   Run the Docker container, passing the `.env` file:
+    *   Run the Docker container, passing the `.env` file and ensuring persistent storage for the database:
         ```bash
-        docker run -p 5000:5000 --env-file .env opnsense-rule-controller
+        # Example: Ensure DATABASE_PATH in .env is /app/instance/opnsense_controller.sqlite
+        # Create a directory for persistent data on your host
+        mkdir -p ./opnsense_controller_data/instance 
+        docker run -p 3000:3000 --env-file .env \
+               -v $(pwd)/opnsense_controller_data/instance:/app/instance \
+               opnsense-rule-controller
         ```
-        *   For persistent SQLite storage with Docker, you might want to mount a volume:
-            ```bash
-            docker run -p 5000:5000 --env-file .env -v $(pwd)/instance:/app/instance opnsense-rule-controller
-            ```
-            (Ensure your `DATABASE_URL` in `.env` is `sqlite:///instance/app.db` if using this volume mount for SQLite).
+        *(Adjust `3000` if your `PORT` environment variable is different. Ensure the volume path `/app/instance` matches the directory used by `DATABASE_PATH` in your `.env` if it's a relative path within the container, or use an absolute path for `DATABASE_PATH` and map accordingly.)*
+
 
 4.  **Access the application:**
-    Open your web browser and navigate to `http://localhost:5000` (or the appropriate host/port if deployed elsewhere).
+    Open your web browser and navigate to `http://localhost:3000` (or the host and port specified by `APP_BASE_URL` once configured).
 
 ## Usage
 
-### Initial Login
-*   Navigate to the application URL. You will be redirected to the login page.
-*   Click "Login with Google" and follow the prompts to authenticate using your Google account.
-*   (Note: The first user to log in might need to be manually activated or an invitation system would handle new user approval in a future iteration).
+### Initial Application Setup (First Run)
+
+1.  **First Admin Login:**
+    *   Navigate to the application URL. You will be redirected to the login page.
+    *   The user whose Google ID matches the `ADMIN_USER_GOOGLE_ID` environment variable should log in.
+2.  **Setup Wizard:**
+    *   Upon successful login, if the application setup is not yet complete, this first admin user will be automatically redirected to the `/setup` page.
+3.  **Configuration Form:**
+    *   The setup form will display fields for:
+        *   `APP_BASE_URL`
+        *   `OPNSENSE_BASE_URL`, `OPNSENSE_API_KEY`, `OPNSENSE_API_SECRET`
+        *   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+        *   `SESSION_SECRET` (this will be pre-filled with the value from `.env` or an auto-generated one, and is read-only on this form).
+    *   Fill in or confirm these details. Values from your `.env` file (if provided) will be used as initial defaults.
+4.  **Save Configuration:**
+    *   Submit the form. These settings will be saved to the application's database. The `SESSION_SECRET` shown on the page will also be persisted.
+5.  **Restart Recommended:**
+    *   After completing the setup, a message will recommend restarting the application. This ensures all services and components (like OAuth callbacks) correctly use the newly saved settings, especially `APP_BASE_URL` and the `SESSION_SECRET`.
+
+### Managing Application Settings (Admin)
+
+Once the initial setup is complete, an administrator can manage application settings:
+
+1.  **Navigation:** Log in as an admin user and navigate to `/admin/settings`.
+2.  **View and Modify Settings:**
+    *   The page displays current settings for `APP_BASE_URL`, OPNsense configuration, and Google OAuth Client ID.
+    *   The status of secrets (OPNsense API Secret, Google Client Secret) will be indicated (e.g., "Currently Set" or "Not Set").
+    *   To update a secret, enter the new value in the provided "New..." password field. Leaving it blank will retain the existing stored secret.
+    *   The `SESSION_SECRET` is not directly editable from this page due to its sensitivity and the implications of changing it (invalidates all sessions). It's managed as described in the "Configuration" section.
+3.  **Save Changes:** Submit the form to save any modifications.
+4.  **Restart May Be Required:** Some changes (e.g., `APP_BASE_URL`, Google OAuth credentials) may require an application restart to take full effect. The application will provide a notification if this is the case.
 
 ### Managing Rules
 *   **Adding Aliases to Manage:**

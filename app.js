@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto'); // Added for session secret generation
 const dotenv = require('dotenv');
 const path = require('path'); // Required for path.join
 const session = require('express-session');
@@ -8,8 +9,50 @@ const passport = require('passport');
 // Load environment variables from .env file
 dotenv.config();
 
-// Initialize Database (must be done before services that might use it at module level)
-const { initializeDatabase } = require('./db/database'); 
+// Database and settings-related imports
+const { initializeDatabase, getSetting, getAllSettings } = require('./db/database'); // Added getAllSettings
+
+// --- Early Database Initialization & Settings Loading ---
+// Initialize database synchronously here to make it available for config loading.
+// better-sqlite3 is synchronous, so this is okay.
+initializeDatabase(); 
+console.log("Database connection initialized for configuration loading.");
+
+let dbSettings = {};
+let setupComplete = false;
+try {
+    // isInitialSetupComplete uses getSetting, which requires DB to be initialized.
+    setupComplete = isInitialSetupComplete(); 
+    if (setupComplete) {
+        dbSettings = getAllSettings(); // Synchronous call
+        console.log("INFO: Initial setup complete. Loaded settings from database.");
+    } else {
+        console.log("INFO: Initial setup not complete. Will use environment variables or defaults. Database settings (except setup flag) not loaded yet.");
+    }
+} catch (error) {
+    console.error("Error during initial setup check or fetching settings from database. Proceeding with environment variables/defaults:", error);
+    // setupComplete remains false, dbSettings remains empty.
+}
+
+// --- Initial Setup State Function (Definition moved before usage) ---
+function isInitialSetupComplete() {
+    try {
+        // Ensure DB is initialized before trying to get a setting.
+        // getDB() function from database.js handles initialization if not already done.
+        // However, direct call to getSetting should be fine if initializeDatabase() in startServer
+        // or an early getDB() call has already run.
+        // If app.js ensures initializeDatabase() is called before routes that might trigger this,
+        // then simply calling getSetting is okay.
+        const setupComplete = getSetting('initial_setup_complete');
+        return setupComplete === 'true';
+    } catch (error) {
+        // This might happen if the database isn't initialized yet or table AppSettings doesn't exist.
+        // Log the error and assume setup is not complete.
+        console.error("Error checking initial setup status from database, assuming setup not complete:", error.message);
+        // It's crucial that if the DB isn't ready, we don't crash but default to "setup needed".
+        return false; 
+    }
+}
 
 // Services (some might be initialized after DB if they depend on it)
 const { initializePassport } = require('./services/authService');
@@ -22,17 +65,69 @@ const app = express();
 const DEFAULT_PLACEHOLDER = "!!MUST_BE_SET_IN_ENVIRONMENT!!";
 const DEFAULT_SQLITE_URL = "sqlite:///app.db"; // Will be relative to project root if instance folder is not used
 
-app.config = { // Using app.config like Flask for consistency in accessing config, though Express usually uses app.set/app.get
-    FLASK_APP_SECRET_KEY: process.env.SESSION_SECRET || DEFAULT_PLACEHOLDER, // Renamed from FLASK_APP_SECRET_KEY to SESSION_SECRET to match .env.example
-    DATABASE_URL: process.env.DATABASE_PATH || path.join(__dirname, 'instance', 'opnsense_controller.sqlite'), // Using DATABASE_PATH from .env.example
-    OPNSENSE_API_KEY: process.env.OPNSENSE_API_KEY || DEFAULT_PLACEHOLDER,
-    OPNSENSE_API_SECRET: process.env.OPNSENSE_API_SECRET || DEFAULT_PLACEHOLDER,
-    OPNSENSE_BASE_URL: process.env.OPNSENSE_BASE_URL || DEFAULT_PLACEHOLDER,
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || DEFAULT_PLACEHOLDER,
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || DEFAULT_PLACEHOLDER,
-    APP_BASE_URL: process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
-    ADMIN_USER_GOOGLE_ID: process.env.ADMIN_USER_GOOGLE_ID || null, // Optional
-    PORT: process.env.PORT || 3000
+// Generate session secret if not provided (this needs to happen before app.config is defined)
+let generatedSessionSecret = null;
+if (!process.env.SESSION_SECRET && !(setupComplete && dbSettings.SESSION_SECRET)) {
+    // Generate a secret if no env secret AND no DB secret (only if setup is complete for DB check)
+    // Or if env secret is placeholder AND no DB secret
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === DEFAULT_PLACEHOLDER) {
+        if (!(setupComplete && dbSettings.SESSION_SECRET)) { // Avoid generating if DB has one and setup is complete
+            generatedSessionSecret = crypto.randomBytes(64).toString('hex');
+            console.log("INFO: No SESSION_SECRET provided via environment or database (or setup not complete for DB check), and environment value is placeholder or missing. A new secure secret has been generated for initial setup or current use. This will be saved during setup if not already set.");
+        }
+    }
+}
+
+
+app.config = {
+    // Priority:
+    // 1. Generated (for initial setup, if no other source and env is placeholder)
+    // 2. Database (if setup complete)
+    // 3. Environment variable
+    // 4. Default placeholder
+    FLASK_APP_SECRET_KEY: generatedSessionSecret || 
+                           (setupComplete && dbSettings.SESSION_SECRET) || 
+                           process.env.SESSION_SECRET || 
+                           DEFAULT_PLACEHOLDER,
+    
+    DATABASE_URL: process.env.DATABASE_PATH || path.join(__dirname, 'instance', 'opnsense_controller.sqlite'), // DATABASE_URL is usually only from env/default
+
+    OPNSENSE_API_KEY: (setupComplete && dbSettings.OPNSENSE_API_KEY) || 
+                      process.env.OPNSENSE_API_KEY || 
+                      DEFAULT_PLACEHOLDER,
+    
+    // For secrets like API secret, we check if it's in DB, then ENV.
+    // The placeholder indicates it's not set by either.
+    // The actual value for OPNSENSE_API_SECRET and GOOGLE_CLIENT_SECRET if sourced from DB will be the direct value.
+    // If from ENV, it will be the ENV value.
+    // These are not typically "!!MUST_BE_SET_IN_ENVIRONMENT!!" if they are missing but rather just undefined or empty.
+    // The DEFAULT_PLACEHOLDER is more for things that MUST have a value.
+    // However, to match the existing logic pattern of checking against DEFAULT_PLACEHOLDER in helpers, we'll keep it.
+    OPNSENSE_API_SECRET: (setupComplete && dbSettings.OPNSENSE_API_SECRET) || 
+                         process.env.OPNSENSE_API_SECRET || 
+                         DEFAULT_PLACEHOLDER,
+    
+    OPNSENSE_BASE_URL: (setupComplete && dbSettings.OPNSENSE_BASE_URL) || 
+                       process.env.OPNSENSE_BASE_URL || 
+                       DEFAULT_PLACEHOLDER,
+    
+    GOOGLE_CLIENT_ID: (setupComplete && dbSettings.GOOGLE_CLIENT_ID) || 
+                      process.env.GOOGLE_CLIENT_ID || 
+                      DEFAULT_PLACEHOLDER,
+    
+    GOOGLE_CLIENT_SECRET: (setupComplete && dbSettings.GOOGLE_CLIENT_SECRET) || 
+                          process.env.GOOGLE_CLIENT_SECRET || 
+                          DEFAULT_PLACEHOLDER,
+    
+    APP_BASE_URL: (setupComplete && dbSettings.APP_BASE_URL) || 
+                  process.env.APP_BASE_URL || 
+                  `http://localhost:${process.env.PORT || 3000}`, // Default APP_BASE_URL includes PORT
+    
+    ADMIN_USER_GOOGLE_ID: (setupComplete && dbSettings.ADMIN_USER_GOOGLE_ID) || 
+                          process.env.ADMIN_USER_GOOGLE_ID || 
+                          null, // Optional, defaults to null
+
+    PORT: process.env.PORT || 3000 // PORT is usually only from env/default
 };
 
 // Apply critical configurations directly
@@ -41,11 +136,17 @@ app.secret = app.config.FLASK_APP_SECRET_KEY; // For express-session secret (use
 
 // --- Startup Configuration Checks & Logging ---
 console.log("--- Application Configuration Status ---");
-if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER) {
-    console.error("CRITICAL: SESSION_SECRET (FLASK_APP_SECRET_KEY) is not set or using default placeholder. Application will not run securely. Please set this environment variable.");
-    // For a real deployment, you might exit here if not in a forgiving dev mode:
-    // process.exit(1); 
+if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && !generatedSessionSecret) { // Check if still placeholder AND no secret was generated
+    console.error("CRITICAL: SESSION_SECRET is not set and could not be auto-generated. Application will not run securely. Please set this environment variable.");
+    // process.exit(1); // Potentially exit if not allowing setup without it
+} else if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && generatedSessionSecret) {
+    console.warn("WARNING: SESSION_SECRET is using a temporarily generated value. Please complete the initial setup to persist it.");
+} else if (generatedSessionSecret && app.config.FLASK_APP_SECRET_KEY !== generatedSessionSecret) {
+    console.info("INFO: SESSION_SECRET is set from environment variables. The auto-generated secret will not be used.");
+} else if (!generatedSessionSecret) {
+    console.info("INFO: SESSION_SECRET is loaded from environment variables.");
 }
+
 if (app.config.OPNSENSE_BASE_URL === DEFAULT_PLACEHOLDER) {
     console.warn("WARNING: OPNSENSE_BASE_URL is not set. OPNsense integration will be disabled.");
 }
@@ -86,6 +187,35 @@ app.use(session({
 initializePassport(app); // Pass app if passport config needs it (e.g. for app.config)
 app.use(passport.initialize());
 app.use(passport.session());
+
+// --- Setup Redirect Middleware ---
+function redirectToSetup(req, res, next) {
+    const allowedSetupPaths = [
+        '/setup',               // Allows GET and POST to /setup itself
+        '/auth/google',         // Google OAuth start
+        '/auth/google/callback',// Google OAuth callback
+        '/auth/logout',         // Allow logging out
+        // Static assets like CSS/JS for the setup page are typically served by express.static
+        // *before* this middleware. If express.static finds and serves the file,
+        // this middleware won't be reached for that request.
+        // If specific /public paths were needed *and* express.static was after this,
+        // they'd need to be listed, e.g., '/public/css/setup.css'.
+    ];
+
+    // Check if current path starts with any of the allowed paths
+    const isAllowedPath = allowedSetupPaths.some(p => req.path.startsWith(p));
+
+    if (!isInitialSetupComplete() && !isAllowedPath) {
+        console.log(`INFO: Initial setup not complete. Redirecting to /setup from ${req.path}`);
+        return res.redirect('/setup');
+    }
+    next();
+}
+
+// Apply setup redirect globally BEFORE other routes but after static and essential middleware
+// Note: This might need careful placement if static assets for setup page are served by express.static
+app.use(redirectToSetup);
+
 
 // --- View Engine Setup (EJS) ---
 app.set('view engine', 'ejs');
@@ -140,7 +270,10 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const uiRoutes = require('./routes/uiRoutes');
 const scheduleRoutes = require('./routes/scheduleRoutes');
+const setupRoutes = require('./routes/setupRoutes'); // Import new setup routes
 
+
+app.use('/setup', setupRoutes); // Use new setup routes
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/schedules', scheduleRoutes);
@@ -150,14 +283,27 @@ app.use('/', uiRoutes); // Should be last for general paths like '/'
 // --- Server Startup ---
 async function startServer() {
     try {
-        if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && process.env.NODE_ENV !== 'test') {
-            console.error("FATAL: SESSION_SECRET (FLASK_APP_SECRET_KEY) is not set or is using the default placeholder. The application cannot start securely.");
-            console.error("Please set a strong, random string for SESSION_SECRET in your environment variables.");
-            process.exit(1); // Exit if critical secret is not set in non-test environments
+        // Allow startup if a secret was generated (pending setup completion) 
+        // or if it's set directly in env and not the placeholder.
+        const isSecretOkayForStartup = (generatedSessionSecret || (app.config.FLASK_APP_SECRET_KEY !== DEFAULT_PLACEHOLDER));
+
+        if (!isSecretOkayForStartup && process.env.NODE_ENV !== 'test') {
+            console.error("FATAL: SESSION_SECRET is not set and was not auto-generated. The application cannot start.");
+            console.error("Please set SESSION_SECRET in your environment variables or ensure it can be generated.");
+            process.exit(1);
+        }
+        if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && generatedSessionSecret && process.env.NODE_ENV !== 'test' && !setupComplete) {
+            console.warn("WARNING: Application starting with a TEMPORARY SESSION_SECRET (auto-generated). Please complete the setup process to persist it or set it in environment.");
+        } else if (app.config.FLASK_APP_SECRET_KEY === DEFAULT_PLACEHOLDER && !generatedSessionSecret) {
+             console.error("FATAL: SESSION_SECRET is not set and was not auto-generated (e.g. DB value exists, or env value exists but is placeholder). The application cannot start securely.");
+             console.error("Please set SESSION_SECRET in your environment variables or ensure it's configured in the database and setup is marked complete.");
+             process.exit(1);
         }
 
-        await initializeDatabase();
-        console.log("Database initialized successfully.");
+
+        // initializeDatabase() was called earlier for config loading.
+        // We can log success or perform other DB checks if needed.
+        console.log("Database connection was previously initialized for config loading.");
 
         if (process.env.NODE_ENV !== 'test') {
             await schedulerService.loadAndScheduleAllActiveJobs();

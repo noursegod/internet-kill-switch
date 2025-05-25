@@ -193,7 +193,7 @@ module.exports = {
     getAllManagedRulesForUser,
     updateManagedRuleDesiredState,
     updateManagedRuleTimer,
-    getRulesWithActiveTimers,
+    getExpiredTimerRules, // This is the actual function name in the code
     // User and OOBE functions
     findOrCreateUserByGoogleId,
     getUserById,
@@ -212,7 +212,79 @@ module.exports = {
     updateSchedule,
     removeSchedule,
     updateScheduleLastTriggered,
+    // AppSettings functions
+    getSetting,
+    setSetting,
+    getAllSettings,
 };
+
+// --- AppSettings Functions ---
+
+/**
+ * Retrieves a specific setting from the AppSettings table.
+ * @param {string} key The key of the setting to retrieve.
+ * @returns {string|null} The value of the setting, or null if not found.
+ */
+function getSetting(key) {
+    const db = getDB();
+    try {
+        const stmt = db.prepare('SELECT value FROM AppSettings WHERE key = ?');
+        const row = stmt.get(key);
+        return row ? row.value : null;
+    } catch (error) {
+        console.error(`Error getting setting (Key: ${key}):`, error);
+        throw error;
+    }
+}
+
+/**
+ * Sets a specific setting in the AppSettings table.
+ * Uses SQLite's UPSERT capability.
+ * @param {string} key The key of the setting to set.
+ * @param {string} value The value of the setting.
+ * @returns {boolean} True if successful.
+ */
+function setSetting(key, value) {
+    const db = getDB();
+    try {
+        // Using INSERT ... ON CONFLICT ... DO UPDATE (UPSERT)
+        // The 'excluded.' prefix refers to the values that would have been inserted if there was no conflict.
+        // CURRENT_TIMESTAMP will handle created_at on initial insert.
+        // We explicitly set updated_at to CURRENT_TIMESTAMP on both insert and update.
+        const stmt = db.prepare(
+            `INSERT INTO AppSettings (key, value, created_at, updated_at) 
+             VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+        );
+        stmt.run(key, String(value)); // Ensure value is stored as text
+        console.log(`Setting '${key}' set/updated successfully.`);
+        return true;
+    } catch (error) {
+        console.error(`Error setting '${key}':`, error);
+        throw error;
+    }
+}
+
+/**
+ * Retrieves all settings from the AppSettings table.
+ * @returns {object} An object where keys are setting keys and values are setting values.
+ */
+function getAllSettings() {
+    const db = getDB();
+    try {
+        const stmt = db.prepare('SELECT key, value FROM AppSettings');
+        const rows = stmt.all();
+        const settings = {};
+        for (const row of rows) {
+            settings[row.key] = row.value;
+        }
+        return settings;
+    } catch (error) {
+        console.error('Error getting all settings:', error);
+        throw error;
+    }
+}
+
 
 // --- User and OOBE DB Functions ---
 

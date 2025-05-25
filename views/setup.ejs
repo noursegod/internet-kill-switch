@@ -1,0 +1,97 @@
+<%- include('partials/_navbar', { currentPath: '/setup' }) %>
+
+<div class="container mt-4">
+    <h1>Initial Application Setup</h1>
+    <p class="lead">
+        Welcome! Please configure the following critical settings to get your application running.
+        These settings are typically stored in an <code>.env</code> file for local development,
+        but this setup process will help you initialize them.
+    </p>
+
+    <%- include('partials/_flash_messages') %>
+    <% if (typeof queryMessages !== 'undefined' && queryMessages.error) { %>
+        <div class="alert alert-danger"><%= queryMessages.error %></div>
+    <% } %>
+    <% if (typeof queryMessages !== 'undefined' && queryMessages.message) { %>
+        <div class="alert alert-info"><%= queryMessages.message %></div>
+    <% } %>
+    <% if (typeof sessionFlashMessages !== 'undefined' && sessionFlashMessages.error) { %>
+        <div class="alert alert-danger"><%= sessionFlashMessages.error %></div>
+      <% } %>
+    <% if (typeof sessionFlashMessages !== 'undefined' && sessionFlashMessages.success) { %>
+        <div class="alert alert-success"><%= sessionFlashMessages.success %></div>
+    <% } %>
+
+
+    <form method="POST" action="/setup">
+        <fieldset>
+            <legend>Application Core Settings</legend>
+            <div class="mb-3">
+                <label for="APP_BASE_URL" class="form-label">Application Base URL</label>
+                <input type="text" class="form-control" id="APP_BASE_URL" name="APP_BASE_URL" value="<%= typeof settings !== 'undefined' && settings.APP_BASE_URL ? settings.APP_BASE_URL : '' %>" required>
+                <div class="form-text">The full public URL where this application will be accessible (e.g., http://localhost:3000 or https://myapp.example.com). This is crucial for generating correct callback URLs for OAuth.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="SESSION_SECRET" class="form-label">Session Secret</label>
+                <input type="text" class="form-control" id="SESSION_SECRET" name="SESSION_SECRET" value="<%= typeof settings !== 'undefined' && settings.FLASK_APP_SECRET_KEY ? settings.FLASK_APP_SECRET_KEY : '' %>" readonly>
+                <div class="form-text">
+                    This is your application's session secret. It has been auto-generated for this setup.
+                    <strong>If you are re-configuring, ensure this matches your existing secret if you don't want to invalidate current sessions.</strong>
+                    This value will be saved to the application settings.
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="mt-4">
+            <legend>OPNsense Firewall Integration</legend>
+            <p>These settings are required to connect to your OPNsense firewall API. If you don't plan to use OPNsense integration, you can leave these blank for now, but features related to firewall rule management will be disabled.</p>
+            <div class="mb-3">
+                <label for="OPNSENSE_BASE_URL" class="form-label">OPNsense Base URL</label>
+                <input type="text" class="form-control" id="OPNSENSE_BASE_URL" name="OPNSENSE_BASE_URL" value="<%= typeof settings !== 'undefined' && settings.OPNSENSE_BASE_URL ? settings.OPNSENSE_BASE_URL : '' %>">
+                <div class="form-text">The base URL of your OPNsense firewall (e.g., https://opnsense.example.com).</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="OPNSENSE_API_KEY" class="form-label">OPNsense API Key</label>
+                <input type="text" class="form-control" id="OPNSENSE_API_KEY" name="OPNSENSE_API_KEY" value="<%= typeof settings !== 'undefined' && settings.OPNSENSE_API_KEY ? settings.OPNSENSE_API_KEY : '' %>">
+            </div>
+
+            <div class="mb-3">
+                <label for="OPNSENSE_API_SECRET" class="form-label">OPNsense API Secret</label>
+                <input type="password" class="form-control" id="OPNSENSE_API_SECRET" name="OPNSENSE_API_SECRET" value="">
+                <div class="form-text">Enter the API Secret. It will be stored securely. Leave blank if not changing.</div>
+            </div>
+        </fieldset>
+
+        <fieldset class="mt-4">
+            <legend>Google OAuth Configuration</legend>
+            <p>These settings are required for Google OAuth 2.0 login. If you don't configure these, user login via Google will be disabled.</p>
+            <div class="mb-3">
+                <label for="GOOGLE_CLIENT_ID" class="form-label">Google Client ID</label>
+                <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" value="<%= typeof settings !== 'undefined' && settings.GOOGLE_CLIENT_ID ? settings.GOOGLE_CLIENT_ID : '' %>">
+            </div>
+
+            <div class="mb-3">
+                <label for="GOOGLE_CLIENT_SECRET" class="form-label">Google Client Secret</label>
+                <input type="password" class="form-control" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" value="">
+                <div class="form-text">Enter the Google Client Secret. It will be stored securely. Leave blank if not changing.</div>
+            </div>
+        </fieldset>
+        
+        <hr class="my-4">
+        
+        <p>
+            <strong>Important:</strong> After submitting, these settings will be saved. 
+            For settings like API secrets and client secrets, if you leave the field blank and a value already exists from your environment variables, 
+            the existing environment variable will continue to be used until explicitly overridden here and saved. 
+            If no environment variable is set and you leave it blank, it will be unset.
+            The <code>SESSION_SECRET</code> shown above will be persisted.
+        </p>
+
+        <button type="submit" class="btn btn-primary btn-lg">Save Configuration and Complete Setup</button>
+    </form>
+</div>
+
+<%- include('partials/_footer') %>
+<%- /* vim: set ft=html : */ -%>

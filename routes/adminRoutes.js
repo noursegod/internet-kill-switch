@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { isAuthenticated, isAdmin } = require('../middleware/authMiddleware');
-const adminController = require('../controllers/adminController'); // We created this earlier
+const adminController = require('../controllers/adminController');
+const settingsController = require('../controllers/settingsController'); // Import settings controller
 
 // All routes in this file will be protected by isAuthenticated and isAdmin
 router.use(isAuthenticated);
@@ -43,5 +44,12 @@ router.post('/invitations/create', async (req, res) => {
         res.redirect('/admin/invitations');
     }
 });
+
+// --- Application Settings Routes (Admin only) ---
+// GET /admin/settings - Display the application settings page
+router.get('/settings', settingsController.getAdminSettingsPage);
+
+// POST /admin/settings - Handle submission of application settings form
+router.post('/settings', settingsController.postAdminSettingsPage);
 
 module.exports = router;
