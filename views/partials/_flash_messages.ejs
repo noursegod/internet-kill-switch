@@ -1,0 +1,76 @@
+<%# This partial handles displaying flash messages passed via session or query parameters %>
+<%# It expects 'sessionFlashMessages' (e.g., { type: 'success', message: 'Hello!' }) %>
+<%# and 'queryMessages' (e.g., { error: 'Oops!', message: 'Done!' }) from res.locals %>
+
+<% 
+let allMessages = [];
+if (typeof sessionFlashMessages !== 'undefined' && sessionFlashMessages.message) {
+    allMessages.push({ type: sessionFlashMessages.type || 'info', text: sessionFlashMessages.message });
+}
+if (typeof queryMessages !== 'undefined') {
+    if (queryMessages.error) {
+        allMessages.push({ type: 'danger', text: queryMessages.error });
+    }
+    if (queryMessages.message) {
+        allMessages.push({ type: 'success', text: queryMessages.message });
+    }
+    if (queryMessages.info) { // Adding support for info type via query
+        allMessages.push({ type: 'info', text: queryMessages.info });
+    }
+    if (queryMessages.warning) { // Adding support for warning type via query
+        allMessages.push({ type: 'warning', text: queryMessages.warning });
+    }
+}
+%>
+
+<% if (allMessages.length > 0) { %>
+    <div class="flash-messages-container" style="position: sticky; top: 0; z-index: 1050; width: 100%;">
+        <% allMessages.forEach(function(msg) { %>
+            <div class="alert alert-<%= msg.type %> alert-dismissible fade show" role="alert">
+                <%= msg.text %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="background: none; border: none; float: right; font-size: 1.2rem; line-height: 1; cursor: pointer;">&times;</button>
+            </div>
+        <% }); %>
+    </div>
+<% } %>
+
+
+<style>
+/* Basic styling for flash messages, can be expanded or moved to a main CSS file */
+/* Ensure these styles are loaded or defined in your main CSS or layout if you move them */
+.flash-messages-container { /* Added container for potential positioning */
+    /* position: sticky; top: 0; z-index: 1050; width: 100%; */ /* Example for sticky messages */
+}
+/* Basic styling for flash messages, can be expanded or moved to a main CSS file */
+.flash-messages {
+    padding: 0;
+    list-style: none;
+    margin-bottom: 20px;
+}
+.alert {
+    padding: 15px;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: .25rem;
+}
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+.alert-info { /* For general messages */
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+.alert-warning { /* For warnings */
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+</style>

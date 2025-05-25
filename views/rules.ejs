@@ -1,0 +1,176 @@
+<%- include('layout', { 
+    pageTitle: 'Manage Firewall Rules', 
+    user: typeof user !== 'undefined' ? user : null, 
+    currentPath: '/rules',
+    messages: typeof messages !== 'undefined' ? messages : {},
+    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {},
+    body: `
+        <div class="rules-container">
+            <h2>OPNsense Firewall Rule Management</h2>
+
+            <% if (!is_opnsense_fully_configured) { %>
+                <p class="alert alert-warning">
+                    OPNsense API is not fully configured on the server. Rule interaction will not be possible. 
+                    Please contact the administrator.
+                </p>
+            <% } %>
+
+            <%- /* Section for Flash Messages - if not handled globally in layout by _flash_messages.ejs already */ %>
+            <% if (locals.flash_error) { %><div class="alert alert-danger"><%= flash_error %></div><% } %>
+            <% if (locals.flash_success) { %><div class="alert alert-success"><%= flash_success %></div><% } %>
+
+
+            <section id="fetch-opnsense-rules">
+                <h3>Fetch Rules from OPNsense</h3>
+                <form action="/rules/fetch-opnsense" method="POST" class="form-inline">
+                    <div class="form-group">
+                        <label for="vlanFilter">Filter by Interface/VLAN (optional):</label>
+                        <input type="text" name="vlanFilter" id="vlanFilter" placeholder="e.g., vlan02, igb1, LAN" value="<%= typeof vlanFilterValue !== 'undefined' ? vlanFilterValue : '' %>">
+                    </div>
+                    <button type="submit" class="button" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>Fetch OPNsense Rules</button>
+                </form>
+            </section>
+
+            <% if (typeof fetchedOpnsenseRules !== 'undefined' && fetchedOpnsenseRules !== null) { %>
+            <section id="opnsense-rules-list" style="margin-top: 30px;">
+                <h3>Available OPNsense Firewall Rules</h3>
+                <% if (fetchedOpnsenseRules.length > 0) { %>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>UUID</th>
+                                <th>Interface(s)</th>
+                                <th>Current Status (Live)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% fetchedOpnsenseRules.forEach(function(rule) { %>
+                                <tr>
+                                    <td><%= rule.description %></td>
+                                    <td><small><%= rule.uuid %></small></td>
+                                    <td><%= rule.interface || 'N/A' %></td>
+                                    <td>
+                                        <% if (rule.enabled) { %>
+                                            <span style="color: green; font-weight: bold;">Enabled</span>
+                                        <% } else { %>
+                                            <span style="color: red;">Disabled</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% const isManaged = managedRules.some(mr => mr.opnsense_rule_uuid === rule.uuid); %>
+                                        <% if (isManaged) { %>
+                                            <span>Already Managed</span>
+                                        <% } else { %>
+                                            <form action="/rules/manage/add" method="POST">
+                                                <input type="hidden" name="opnsense_rule_uuid" value="<%= rule.uuid %>">
+                                                <input type="hidden" name="description" value="<%= rule.description %>">
+                                                <button type="submit" class="button-small" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>Add to Managed</button>
+                                            </form>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } else { %>
+                    <p>No firewall rules found on OPNsense matching your criteria, or unable to fetch.</p>
+                <% } %>
+            </section>
+            <% } %>
+
+            <hr style="margin-top: 30px; margin-bottom: 30px;">
+
+            <section id="managed-rules-list">
+                <h3>Your Managed Rules</h3>
+                <% if (managedRules && managedRules.length > 0) { %>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>UUID</th>
+                                <th>Desired State (App DB)</th>
+                                <th>Actual OPNsense Status (Live)</th>
+                                <th>Timer</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% managedRules.forEach(function(mRule) { %>
+                                <tr>
+                                    <td><%= mRule.description %></td>
+                                    <td><small><%= mRule.opnsense_rule_uuid %></small></td>
+                                    <td>
+                                        <% if (mRule.desired_state) { %>
+                                            <span style="color: green; font-weight: bold;">Enabled</span>
+                                        <% } else { %>
+                                            <span style="color: red;">Disabled</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (mRule.live_opnsense_status === 'enabled') { %>
+                                            <span style="color: green; font-weight: bold;">Enabled</span>
+                                        <% } else if (mRule.live_opnsense_status === 'disabled') { %>
+                                            <span style="color: red;">Disabled</span>
+                                        <% } else if (mRule.live_opnsense_status === 'not_found') { %>
+                                            <span style="color: orange;">Not Found on OPNsense</span>
+                                        <% } else if (mRule.live_opnsense_status === 'error' || mRule.live_opnsense_status === 'client_error') { %>
+                                            <span style="color: #cc0000; font-weight: bold;">Error Fetching Status</span>
+                                        <% } else { %>
+                                            <span style="color: #777;">Unknown</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <% if (mRule.timer_info && mRule.timer_info.expires_in_seconds > 0) { %>
+                                            <span style="color: #007bff;">
+                                                Reverts to '<%= mRule.timer_info.action_on_expiry %>' in 
+                                                ~<%= Math.ceil(mRule.timer_info.expires_in_seconds / 60) %> min(s)
+                                            </span>
+                                            <form action="/rules/manage/<%= mRule.opnsense_rule_uuid %>/timer/cancel" method="POST" style="display: inline;">
+                                                <button type="submit" class="button-warning button-small" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>Cancel Timer</button>
+                                            </form>
+                                        <% } else { %>
+                                            <span>No active timer</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <form action="/rules/manage/<%= mRule.opnsense_rule_uuid %>/toggle" method="POST" style="display: inline-block; margin-bottom: 5px;">
+                                            <button type="submit" class="button button-small" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>
+                                                Toggle (Currently <%= mRule.live_opnsense_status === 'enabled' ? 'ON' : 'OFF' %>)
+                                            </button>
+                                        </form>
+                                        <form action="/rules/manage/<%= mRule.opnsense_rule_uuid %>/timer/start" method="POST" class="form-inline" style="display: inline-block; margin-bottom: 5px;">
+                                            <input type="number" name="duration_minutes" value="30" min="1" max="1440" style="width: 60px;" required <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>
+                                            <select name="action_during_timer" style="width: 90px;" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>
+                                                <option value="enable">Enable for</option>
+                                                <option value="disable">Disable for</option>
+                                            </select>
+                                            <span>mins</span>
+                                            <button type="submit" class="button-primary button-small" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>Start Timer</button>
+                                        </form>
+                                        <form action="/rules/manage/<%= mRule.opnsense_rule_uuid %>/remove" method="POST" style="display: inline-block;">
+                                            <button type="submit" class="button-danger button-small" onclick="return confirm('Are you sure you want to remove this rule from management?');" <%= !is_opnsense_fully_configured ? 'disabled' : '' %>>Unmanage</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                <% } else { %>
+                    <p>You are not currently managing any firewall rules. Use the form above to fetch rules from OPNsense and add them.</p>
+                <% } %>
+            </section>
+        </div>
+        <style>
+            .form-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+            .form-inline .form-group { margin-bottom: 0; }
+            .form-inline input, .form-inline select, .form-inline button { margin-right: 5px; }
+            .status-enabled { color: green; font-weight: bold; }
+            .status-disabled { color: red; }
+            .status-unknown { color: #777; }
+            .status-error { color: #b30000; font-weight: bold; }
+            .status-timer { color: #007bff; }
+        </style>
+    `
+}) %>

@@ -1,0 +1,29 @@
+<div class="config-status" style="text-align: center; padding: 10px 0; font-size: 0.8em; color: #777;">
+    <p style="margin: 2px 0;">
+        App Secret: 
+        <% if (is_app_secret_key_configured) { %>
+            <span style="color: green;">Set</span>
+        <% } else { %>
+            <span style="color: red; font-weight: bold;">NOT SET (CRITICAL!)</span>
+        <% } %>
+    </p>
+    <p style="margin: 2px 0;">
+        Google OAuth: 
+        <% if (is_google_oauth_configured) { %>
+            <span style="color: green;">Configured</span>
+        <% } else { %>
+            <span style="color: orange;">Not Configured</span>
+        <% } %>
+    </p>
+    <p style="margin: 2px 0;">
+        OPNsense API: 
+        <% if (is_opnsense_fully_configured) { %>
+            <span style="color: green;">Configured</span>
+        <% } else { %>
+            <span style="color: orange;">Not Fully Configured</span>
+        <% } %>
+    </p>
+    <% if (!is_app_secret_key_configured || !is_google_oauth_configured || !is_opnsense_fully_configured) { %>
+        <p style="margin: 5px 0;"><small>See <code>.env.example</code> and server logs for configuration guidance.</small></p>
+    <% } %>
+</div>

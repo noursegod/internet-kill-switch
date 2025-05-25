@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}User Profile - OPNsense Rule Manager{% endblock %}
+
+{% block content %}
+    <h2>User Profile</h2>
+    {% if session.user_info %}
+        <p><strong>Email:</strong> {{ session.user_info.email }}</p>
+        <p><strong>Name:</strong> {{ session.user_info.name }}</p>
+        {# You can add more profile information here as needed #}
+    {% else %}
+        <p>User information not available. Please try logging in again.</p>
+    {% endif %}
+    <a href="{{ url_for('logout') }}" class="button">Logout</a>
+{% endblock %}

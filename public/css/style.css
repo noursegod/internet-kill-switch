@@ -1,0 +1,137 @@
+/* Minimal global styles - can be expanded upon */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    line-height: 1.6;
+}
+
+.container {
+    width: 90%;
+    max-width: 1200px;
+    margin: 20px auto;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+header, footer {
+    background-color: #333;
+    color: white;
+    padding: 1em 0;
+    text-align: center;
+}
+
+/* Basic styles from layout.ejs moved here for consistency */
+nav ul { list-style-type: none; padding: 0; margin: 0; text-align: center; }
+nav ul li { display: inline; margin-right: 20px; }
+nav ul li a { color: white; text-decoration: none; }
+nav ul li a:hover { text-decoration: underline; }
+
+.alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; }
+.alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+.alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+.alert-info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+.alert-warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
+
+.form-group { margin-bottom: 1rem; }
+label { display: block; margin-bottom: .5rem; }
+input[type="text"], input[type="number"], input[type="email"], input[type="password"], select {
+    width: 100%;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: .25rem;
+    box-sizing: border-box; /* Ensure padding and border don't increase width */
+    transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+}
+input[type="checkbox"] { margin-right: 5px; vertical-align: middle;}
+
+
+.button, button {
+    display: inline-block;
+    font-weight: 400;
+    color: #fff;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: #007bff;
+    border: 1px solid #007bff;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: .25rem;
+    text-decoration: none;
+    margin-top: 5px; /* Add some margin for standalone buttons */
+    margin-bottom: 5px;
+}
+.button:hover, button:hover { background-color: #0069d9; border-color: #0062cc; }
+
+.button-primary { background-color: #007bff; border-color: #007bff; }
+.button-primary:hover { background-color: #0069d9; border-color: #0062cc; }
+
+.button-danger { background-color: #dc3545; border-color: #dc3545; }
+.button-danger:hover { background-color: #c82333; border-color: #bd2130; }
+
+.button-warning { background-color: #ffc107; border-color: #ffc107; color: #212529; }
+.button-warning:hover { background-color: #e0a800; border-color: #d39e00; }
+
+.button-small { padding: .25rem .5rem; font-size: .875rem; line-height: 1.5; border-radius: .2rem; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 20px;}
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
+
+.form-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.form-inline .form-group { margin-bottom: 0; }
+.form-inline input, .form-inline select, .form-inline button { margin-right: 5px; margin-bottom: 0; margin-top:0; }
+.form-inline input[type="number"] { width: 70px; } /* Specific width for duration input */
+.form-inline select { width: auto; } /* Allow select to size based on content */
+
+/* Status indicators from Python app's CSS */
+.status-enabled { color: green; font-weight: bold; }
+.status-disabled { color: red; }
+.status-unknown { color: #777; }
+.status-error { color: #b30000; font-weight: bold; }
+.status-timer { color: #007bff; font-style: italic; }
+.status-none { color: #6c757d; } /* For 'No active timer' */
+.status-ok { color: green; }
+.status-warning { color: orange; }
+
+
+/* Navbar specific styles moved from _navbar.ejs for better organization */
+nav { background-color: #333; padding: 1em 0; }
+nav ul { list-style-type: none; padding: 0; margin: 0; text-align: center; }
+nav ul li { display: inline; margin-right: 20px; }
+nav ul li a, nav ul li span { color: white; text-decoration: none; }
+nav ul li a:hover, nav ul li a.active { text-decoration: underline; font-weight: bold; }
+.button-link-style {
+    background: none;
+    border: none;
+    color: white;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    display: inline;
+}
+.button-link-style:hover { text-decoration: underline; }
+
+/* Config status in footer */
+.config-status { text-align: center; padding: 10px 0; font-size: 0.8em; color: #777; border-top: 1px solid #444; margin-top: 10px;}
+.config-status p { margin: 2px 0; }
+.config-status span { font-weight: bold; }
+
+/* Login page specific */
+.login-container { text-align: center; max-width: 400px; margin: 50px auto; padding: 20px; }
+.login-button { display: inline-block; margin-top: 20px; padding: 12px 25px; font-size: 1.1em; }
+
+/* Index page specific */
+.index-container { text-align: center; padding: 40px 20px; }

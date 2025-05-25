@@ -1,0 +1,53 @@
+<%- include('layout', { 
+    pageTitle: 'Login - OPNsense Rule Controller', 
+    user: typeof user !== 'undefined' ? user : null, 
+    currentPath: '/login',
+    messages: typeof messages !== 'undefined' ? messages : {},
+    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {},
+    body: `
+        <div class="login-container">
+            <h2>Login</h2>
+            <p>Please log in to manage your OPNsense firewall rules.</p>
+            
+            <% if (is_google_oauth_configured) { %>
+                <a href="/auth/google" class="button login-button">Login with Google</a>
+            <% } else { %>
+                <p class="alert alert-warning">Login with Google is currently disabled due to server configuration. Please contact the administrator.</p>
+            <% } %>
+
+            <% if (queryMessages && queryMessages.error === 'oauth_not_configured') { %>
+                <p class="alert alert-danger" style="margin-top: 15px;">Google OAuth is not configured by the administrator. Login is not possible.</p>
+            <% } %>
+            <% if (queryMessages && queryMessages.error === 'google_auth_failed') { %>
+                <p class="alert alert-danger" style="margin-top: 15px;">Google authentication failed. Please try again or contact support if the issue persists.</p>
+            <% } %>
+            <% if (queryMessages && queryMessages.message === 'unauthenticated' || queryMessages.message === 'unauthenticated_admin_area') { %>
+                <p class="alert alert-info" style="margin-top: 15px;">Please log in to access this page.</p>
+            <% } %>
+            <% if (queryMessages && queryMessages.message === 'logged_out_successfully') { %>
+                <p class="alert alert-success" style="margin-top: 15px;">You have been successfully logged out.</p>
+            <% } %>
+             <% if (locals.message && locals.message.includes('Invitation code required')) { %>
+                <p class="alert alert-danger" style="margin-top: 15px;"><%= locals.message %></p>
+            <% } %>
+            <% if (locals.message && locals.message.includes('Invalid or used invitation code')) { %>
+                <p class="alert alert-danger" style="margin-top: 15px;"><%= locals.message %></p>
+            <% } %>
+
+
+            <hr style="margin-top: 30px; margin-bottom: 20px;">
+            <h4>Configuration Status Overview:</h4>
+            <p><small>This section is for diagnostic purposes.</small></p>
+            <%- include('partials/_config_status', {
+                is_app_secret_key_configured: is_app_secret_key_configured,
+                is_opnsense_fully_configured: is_opnsense_fully_configured,
+                is_google_oauth_configured: is_google_oauth_configured
+            }) %>
+
+        </div>
+        <style>
+            .login-container { text-align: center; max-width: 400px; margin: 50px auto; padding: 20px; }
+            .login-button { display: inline-block; margin-top: 20px; padding: 12px 25px; font-size: 1.1em; }
+        </style>
+    `
+}) %>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Login - OPNsense Rule Manager{% endblock %}
+
+{% block content %}
+    <h2>Login</h2>
+    <p>Please log in to manage firewall rules.</p>
+    <a href="{{ url_for('google.login') }}" class="button">Login with Google</a>
+    
+    {# Display this section if OPNsense client is not configured, as a warning #}
+    {% if not opnsense_client_configured %}
+    <div class="warning" style="margin-top: 20px; padding: 10px; border: 1px solid orange; background-color: #fff3e0;">
+        <p><strong>Warning:</strong> The OPNsense API client is not fully configured on the server.
+        Please ensure the following environment variables (or app config values) are set correctly by the administrator:</p>
+        <ul>
+            <li><code>OPNSENSE_API_KEY</code></li>
+            <li><code>OPNSENSE_API_SECRET</code></li>
+            <li><code>OPNSENSE_BASE_URL</code></li>
+        </ul>
+        <p>Without these, the application cannot connect to OPNsense, and rule management will not function.</p>
+    </div>
+    {% endif %}
+{% endblock %}

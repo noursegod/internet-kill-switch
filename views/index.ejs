@@ -1,0 +1,50 @@
+<%- include('layout', { 
+    pageTitle: 'Welcome - OPNsense Rule Controller', 
+    user: typeof user !== 'undefined' ? user : null, 
+    currentPath: '/',
+    messages: typeof messages !== 'undefined' ? messages : {},
+    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {},
+    body: `
+        <div class="index-container" style="text-align: center; padding: 40px 20px;">
+            <h1>Welcome to the OPNsense Rule Controller</h1>
+
+            <% if (user) { %>
+                <p>Hello, <strong><%= user.displayName || user.email %></strong>!</p>
+                <p>You are logged in.</p>
+                <p><a href="/rules" class="button">Manage Your Firewall Rules</a></p>
+                <% if (user.is_admin) { %>
+                    <p><a href="/admin/invitations" class="button">Manage Invitations (Admin)</a></p>
+                <% } %>
+            <% } else { %>
+                <p>This application allows you to manage specific firewall rules on your OPNsense router with ease.</p>
+                
+                <% if (invitationCode) { %>
+                    <div class="alert alert-success" style="margin-top: 20px;">
+                        Invitation code <strong><%= invitationCode %></strong> has been applied!
+                        Please log in with Google to complete your registration.
+                    </div>
+                <% } else if (queryMessages && queryMessages.message === 'invitation_required_for_registration') { %>
+                     <div class="alert alert-info" style="margin-top: 20px;">
+                        An invitation code is required for new user registration. If you have one, please use the link in the format: <code>/?invitation_code=YOUR_CODE_HERE</code>
+                    </div>
+                <% } %>
+
+
+                <% if (is_google_oauth_configured) { %>
+                    <p style="margin-top: 30px;">
+                        <a href="/auth/google" class="button button-primary" style="font-size: 1.2em; padding: 12px 30px;">
+                            Login with Google
+                        </a>
+                    </p>
+                    <% if (!invitationCode && !(queryMessages && queryMessages.message === 'invitation_required_for_registration')) { %>
+                        <p style="margin-top: 15px;"><small>New users may require an invitation code supplied in the URL (e.g., <code>/?invitation_code=YOUR_CODE</code>).</small></p>
+                    <% } %>
+                <% } else { %>
+                    <p class="alert alert-warning" style="margin-top: 30px;">
+                        Login with Google is currently disabled due to server configuration. Please contact the administrator.
+                    </p>
+                <% } %>
+            <% } %>
+        </div>
+    `
+}) %>
