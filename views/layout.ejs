@@ -32,22 +32,22 @@
 </head>
 <body>
     <header>
-        <%- include('partials/_navbar', { user: typeof user !== 'undefined' ? user : null, currentPath: typeof currentPath !== 'undefined' ? currentPath : '/' }) %>
+        <% include partials/_navbar { user: typeof user !== 'undefined' ? user : null, currentPath: typeof currentPath !== 'undefined' ? currentPath : '/' } %>
     </header>
 
     <div class="container">
-        <%- include('partials/_flash_messages', { messages: typeof messages !== 'undefined' ? messages : {} }) %>
+        <% include partials/_flash_messages { messages: typeof messages !== 'undefined' ? messages : {} } %>
         <%- body %>
     </div>
 
     <footer>
         <p>&copy; <%= new Date().getFullYear() %> OPNsense Rule Controller</p>
         <!-- You can add the config status partial here if desired -->
-        <%- include('partials/_config_status', {
+        <% include partials/_config_status {
             is_app_secret_key_configured: typeof is_app_secret_key_configured !== 'undefined' ? is_app_secret_key_configured : false,
             is_opnsense_fully_configured: typeof is_opnsense_fully_configured !== 'undefined' ? is_opnsense_fully_configured : false,
             is_google_oauth_configured: typeof is_google_oauth_configured !== 'undefined' ? is_google_oauth_configured : false
-        }) %>
+        } %>
     </footer>
 </body>
 </html>
