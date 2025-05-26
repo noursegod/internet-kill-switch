@@ -1,4 +1,4 @@
-<%- include('layout', { 
+<% include layout { 
     pageTitle: 'Login - OPNsense Rule Controller', 
     user: typeof user !== 'undefined' ? user : null, 
     currentPath: '/auth/login', // Updated currentPath
@@ -59,4 +59,4 @@
             .auth-switch-link { margin-top: 20px; }
         </style>
     `
-}) %>
+} %>
