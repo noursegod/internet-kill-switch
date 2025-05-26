@@ -3,7 +3,8 @@
     "image": "mcr.microsoft.com/devcontainers/javascript-node:0-18", // Uses Node.js 18
 
     "features": {
-        "ghcr.io/devcontainers/features/git:1": {} // Ensures Git is available
+        "ghcr.io/devcontainers/features/git:1": {}, // Ensures Git is available
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
 
     // Forward the application port from the container to the host.
