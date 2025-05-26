@@ -1,53 +1,62 @@
 <%- include('layout', { 
     pageTitle: 'Login - OPNsense Rule Controller', 
     user: typeof user !== 'undefined' ? user : null, 
-    currentPath: '/login',
-    messages: typeof messages !== 'undefined' ? messages : {},
-    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {},
+    currentPath: '/auth/login', // Updated currentPath
+    // sessionFlashMessages is available globally via app.locals or context processor in app.js
     body: `
-        <div class="login-container">
+        <div class="auth-container">
             <h2>Login</h2>
             <p>Please log in to manage your OPNsense firewall rules.</p>
-            
+
+            <%- include('partials/_flash_messages') %> <% /* Flash messages will be rendered here if any */ %>
+
+            <form action="/auth/login" method="POST" class="auth-form">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="button">Login</button>
+            </form>
+
             <% if (is_google_oauth_configured) { %>
-                <a href="/auth/google" class="button login-button">Login with Google</a>
+                <p class="or-separator"><span>OR</span></p>
+                <a href="/auth/google" class="button google-login-button">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google logo" width="20" height="20" style="vertical-align: middle; margin-right: 8px;">
+                    Login with Google
+                </a>
             <% } else { %>
-                <p class="alert alert-warning">Login with Google is currently disabled due to server configuration. Please contact the administrator.</p>
+                <p class="alert alert-warning" style="margin-top: 15px;">Login with Google is currently disabled due to server configuration.</p>
             <% } %>
 
-            <% if (queryMessages && queryMessages.error === 'oauth_not_configured') { %>
-                <p class="alert alert-danger" style="margin-top: 15px;">Google OAuth is not configured by the administrator. Login is not possible.</p>
-            <% } %>
-            <% if (queryMessages && queryMessages.error === 'google_auth_failed') { %>
-                <p class="alert alert-danger" style="margin-top: 15px;">Google authentication failed. Please try again or contact support if the issue persists.</p>
-            <% } %>
-            <% if (queryMessages && queryMessages.message === 'unauthenticated' || queryMessages.message === 'unauthenticated_admin_area') { %>
-                <p class="alert alert-info" style="margin-top: 15px;">Please log in to access this page.</p>
-            <% } %>
-            <% if (queryMessages && queryMessages.message === 'logged_out_successfully') { %>
-                <p class="alert alert-success" style="margin-top: 15px;">You have been successfully logged out.</p>
-            <% } %>
-             <% if (locals.message && locals.message.includes('Invitation code required')) { %>
-                <p class="alert alert-danger" style="margin-top: 15px;"><%= locals.message %></p>
-            <% } %>
-            <% if (locals.message && locals.message.includes('Invalid or used invitation code')) { %>
-                <p class="alert alert-danger" style="margin-top: 15px;"><%= locals.message %></p>
-            <% } %>
-
-
+            <p class="auth-switch-link">
+                Don't have an account? <a href="/auth/register">Register here</a>
+            </p>
+            
             <hr style="margin-top: 30px; margin-bottom: 20px;">
             <h4>Configuration Status Overview:</h4>
             <p><small>This section is for diagnostic purposes.</small></p>
             <%- include('partials/_config_status', {
-                is_app_secret_key_configured: is_app_secret_key_configured,
-                is_opnsense_fully_configured: is_opnsense_fully_configured,
-                is_google_oauth_configured: is_google_oauth_configured
+                is_app_secret_key_configured: typeof is_app_secret_key_configured !== 'undefined' ? is_app_secret_key_configured : false,
+                is_opnsense_fully_configured: typeof is_opnsense_fully_configured !== 'undefined' ? is_opnsense_fully_configured : false,
+                is_google_oauth_configured: typeof is_google_oauth_configured !== 'undefined' ? is_google_oauth_configured : false
             }) %>
-
         </div>
         <style>
-            .login-container { text-align: center; max-width: 400px; margin: 50px auto; padding: 20px; }
-            .login-button { display: inline-block; margin-top: 20px; padding: 12px 25px; font-size: 1.1em; }
+            .auth-container { text-align: center; max-width: 400px; margin: 30px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+            .auth-form .form-group { margin-bottom: 15px; text-align: left; }
+            .auth-form label { display: block; margin-bottom: 5px; font-weight: bold; }
+            .auth-form input[type="email"], .auth-form input[type="password"], .auth-form input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+            .auth-form button { width: 100%; padding: 12px; font-size: 1.1em; }
+            .google-login-button { display: inline-block; margin-top: 10px; padding: 10px 20px; font-size: 1em; background-color: #4285F4; color: white; border: none; border-radius: 4px; text-decoration: none; }
+            .google-login-button img { margin-right: 10px; vertical-align: middle; }
+            .or-separator { display: flex; align-items: center; text-align: center; margin: 20px 0; }
+            .or-separator span { padding: 0 10px; background-color: #fff; color: #888; }
+            .or-separator::before, .or-separator::after { content: ''; flex: 1; border-bottom: 1px solid #ccc; }
+            .auth-switch-link { margin-top: 20px; }
         </style>
     `
 }) %>

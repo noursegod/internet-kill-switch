@@ -63,22 +63,22 @@ router.get('/google/callback',
 );
 
 // Logout route
-router.post('/logout', (req, res, next) => {
-    if (req.user) { 
-        const username = req.user.email || req.user.displayName || 'User';
-        req.logout((err) => {
-            if (err) {
-                console.error("Error during logout:", err);
-                req.session.flashMessages = { type: 'error', message: 'Error during logout.' };
-                return res.redirect('/'); // Or an error page
-            }
-            req.session.flashMessages = { type: 'success', message: 'You have been successfully logged out.' };
-            console.log(`${username} logged out successfully.`);
-            return res.redirect('/login');
-        });
-    } else {
-        return res.redirect('/login');
-    }
-});
+// router.post('/logout', (req, res, next) => {
+//     if (req.user) { 
+//         const username = req.user.email || req.user.displayName || 'User';
+//         req.logout((err) => {
+//             if (err) {
+//                 console.error("Error during logout:", err);
+//                 req.session.flashMessages = { type: 'error', message: 'Error during logout.' };
+//                 return res.redirect('/'); // Or an error page
+//             }
+//             req.session.flashMessages = { type: 'success', message: 'You have been successfully logged out.' };
+//             console.log(`${username} logged out successfully.`);
+//             return res.redirect('/login');
+//         });
+//     } else {
+//         return res.redirect('/login');
+//     }
+// });
 
 module.exports = router;

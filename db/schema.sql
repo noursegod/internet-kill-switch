@@ -1,81 +1,62 @@
--- Users Table: Stores user information, primarily for linking rules and tracking.
 CREATE TABLE IF NOT EXISTS Users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     google_id TEXT UNIQUE,      -- Google's unique user identifier
     email TEXT UNIQUE NOT NULL, -- User's email, must be unique
+    password TEXT,              -- Hashed password for local auth
     display_name TEXT,          -- User's display name
     is_admin BOOLEAN DEFAULT FALSE, -- Flag to indicate if the user is an administrator
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME
 );
 
--- ManagedRules Table: Defines the OPNsense firewall filter rules that are managed by this application.
-CREATE TABLE IF NOT EXISTS ManagedRules (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    opnsense_rule_uuid TEXT UNIQUE NOT NULL, -- The UUID of the OPNsense firewall filter rule
-    description TEXT,                        -- User-provided description for this managed rule
-    desired_state BOOLEAN DEFAULT FALSE,     -- The state the user wants this rule to be in (True=enabled, False=disabled)
-    user_id INTEGER NOT NULL,                -- Foreign key linking to the user who manages this rule
-    timer_active_until DATETIME DEFAULT NULL, -- When an active timer for this rule expires (UTC)
-    timer_action_on_expiry TEXT CHECK(timer_action_on_expiry IN ('enable', 'disable')) DEFAULT NULL, -- Action on timer expiry
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- Consider adding a trigger to update this
-    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
-    UNIQUE (user_id, opnsense_rule_uuid)     -- Ensure a user can only manage a specific rule UUID once
+CREATE TABLE IF NOT EXISTS AppSettings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    type TEXT -- 'string', 'boolean', 'number'
 );
 
--- Schedules Table: Stores cron-based schedules for enabling/disabling managed rules.
 CREATE TABLE IF NOT EXISTS Schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    managed_rule_id INTEGER NOT NULL, -- Foreign key to the ManagedRules table
-    user_id INTEGER NOT NULL,         -- Foreign key to the Users table (owner of the schedule)
-    cron_expression TEXT NOT NULL,    -- Standard CRON expression string
-    action_to_perform TEXT NOT NULL CHECK(action_to_perform IN ('enable', 'disable')), -- Action: 'enable' or 'disable'
-    is_enabled BOOLEAN DEFAULT TRUE,  -- Whether this schedule is currently active
-    last_triggered_at DATETIME,       -- Timestamp of when this schedule was last successfully triggered
+    name TEXT NOT NULL,
+    description TEXT,
+    cron_expression TEXT NOT NULL,
+    action_type TEXT NOT NULL, -- e.g., 'ENABLE_FIREWALL_ALIAS', 'DISABLE_FIREWALL_ALIAS'
+    action_params TEXT, -- JSON string of parameters, e.g., {"alias_name": "MyAlias"}
+    is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- Consider adding a trigger
-    FOREIGN KEY (managed_rule_id) REFERENCES ManagedRules(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP -- Ensures we can track updates
 );
 
--- Invitations Table: Stores invitation codes for new user registration.
-CREATE TABLE IF NOT EXISTS Invitations (
+-- Seed initial settings if they don't exist
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('initial_setup_complete', 'false', 'boolean');
+-- Add other essential default settings here
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('SESSION_SECRET', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('OPNSENSE_BASE_URL', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('OPNSENSE_API_KEY', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('OPNSENSE_API_SECRET', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('GOOGLE_CLIENT_ID', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('GOOGLE_CLIENT_SECRET', '', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('APP_BASE_URL', 'http://localhost:3000', 'string');
+INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('ADMIN_USER_GOOGLE_ID', '', 'string');
+
+
+-- Example of a more complex AppSetting, perhaps for storing a JSON object
+-- INSERT OR IGNORE INTO AppSettings (key, value, type) VALUES ('firewall_alias_groups', '{}', 'json');
+
+CREATE TABLE IF NOT EXISTS JobRuns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT UNIQUE NOT NULL,       -- The unique invitation code (e.g., a UUID)
-    is_used BOOLEAN DEFAULT FALSE,   -- Flag to indicate if the invitation has been used
-    used_by_user_id INTEGER,         -- Which user claimed this invitation (optional)
-    created_by_user_id INTEGER,    -- User who generated this invitation (admin)
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    -- removed expires_at for simplicity in this iteration
-    FOREIGN KEY (used_by_user_id) REFERENCES Users(id) ON DELETE SET NULL,
-    FOREIGN KEY (created_by_user_id) REFERENCES Users(id) ON DELETE SET NULL 
+    schedule_id INTEGER,
+    job_name TEXT NOT NULL, -- Could be the schedule name or a more specific job identifier
+    run_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL, -- e.g., 'SUCCESS', 'FAILURE', 'STARTED'
+    details TEXT, -- Could be error message, stack trace, or success summary
+    FOREIGN KEY (schedule_id) REFERENCES Schedules(id) ON DELETE SET NULL
 );
 
--- Indexes for common lookups (optional for initial setup, but good practice)
-CREATE INDEX IF NOT EXISTS idx_users_google_id ON Users(google_id);
+-- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON Users(email);
-
-CREATE INDEX IF NOT EXISTS idx_managedrules_user_id ON ManagedRules(user_id);
-CREATE INDEX IF NOT EXISTS idx_managedrules_opnsense_rule_uuid ON ManagedRules(opnsense_rule_uuid); -- Corrected index name
-
-CREATE INDEX IF NOT EXISTS idx_schedules_managed_rule_id ON Schedules(managed_rule_id);
-CREATE INDEX IF NOT EXISTS idx_schedules_user_id ON Schedules(user_id);
-CREATE INDEX IF NOT EXISTS idx_schedules_is_enabled ON Schedules(is_enabled);
-
-CREATE INDEX IF NOT EXISTS idx_invitations_code ON Invitations(code);
-
--- Future tables could include:
--- AuditLog: To track user actions, rule changes, scheduler actions.
--- AppSettings: For application-wide settings managed via UI (if any).
--- RuleTimers: If the timer logic becomes more complex than just fields on ManagedRules.
--- (The current Python version uses fields on ManagedRule for simplicity of timers)
-
--- AppSettings Table: Stores general application settings.
-CREATE TABLE IF NOT EXISTS AppSettings (
-    key TEXT PRIMARY KEY NOT NULL,
-    value TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP -- Managed by JS on update
-);
-CREATE INDEX IF NOT EXISTS idx_appsettings_key ON AppSettings(key);
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON Users(google_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON Schedules(is_active);
+CREATE INDEX IF NOT EXISTS idx_jobruns_schedule_id ON JobRuns(schedule_id);
+CREATE INDEX IF NOT EXISTS idx_jobruns_status ON JobRuns(status);
+CREATE INDEX IF NOT EXISTS idx_jobruns_run_at ON JobRuns(run_at);

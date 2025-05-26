@@ -1,0 +1,45 @@
+<%- include('layout', { 
+    pageTitle: 'Register - OPNsense Rule Controller', 
+    user: typeof user !== 'undefined' ? user : null, 
+    currentPath: '/auth/register',
+    body: `
+        <div class="auth-container">
+            <h2>Register</h2>
+            <p>Create a new account.</p>
+
+            <%- include('partials/_flash_messages') %>
+
+            <form action="/auth/register" method="POST" class="auth-form">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required value="<%= locals.input && locals.input.email ? locals.input.email : '' %>">
+                </div>
+                <div class="form-group">
+                    <label for="displayName">Display Name (Optional)</label>
+                    <input type="text" id="displayName" name="displayName" value="<%= locals.input && locals.input.displayName ? locals.input.displayName : '' %>">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required>
+                </div>
+                <button type="submit" class="button">Register</button>
+            </form>
+            <p class="auth-switch-link">
+                Already have an account? <a href="/auth/login">Login here</a>
+            </p>
+        </div>
+        <style>
+            /* Styles from login.ejs can be reused or put in global CSS if this auth-container is common */
+            .auth-container { text-align: center; max-width: 400px; margin: 30px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+            .auth-form .form-group { margin-bottom: 15px; text-align: left; }
+            .auth-form label { display: block; margin-bottom: 5px; font-weight: bold; }
+            .auth-form input[type="email"], .auth-form input[type="password"], .auth-form input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+            .auth-form button { width: 100%; padding: 12px; font-size: 1.1em; }
+            .auth-switch-link { margin-top: 20px; }
+        </style>
+    `
+}) %>
