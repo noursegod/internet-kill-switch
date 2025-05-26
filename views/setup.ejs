@@ -1,4 +1,4 @@
-<%- include('partials/_navbar', { currentPath: '/setup' }) %>
+<% include partials/_navbar { currentPath: '/setup' } %>
 
 <div class="container mt-4">
     <h1>Initial Application Setup</h1>
@@ -8,7 +8,7 @@
         but this setup process will help you initialize them.
     </p>
 
-    <%- include('partials/_flash_messages') %>
+    <% include partials/_flash_messages {} %>
     <% if (typeof queryMessages !== 'undefined' && queryMessages.error) { %>
         <div class="alert alert-danger"><%= queryMessages.error %></div>
     <% } %>
@@ -93,5 +93,5 @@
     </form>
 </div>
 
-<%- include('partials/_footer') %>
+<% include partials/_footer {} %>
 <%# /* vim: set ft=html : */ %>

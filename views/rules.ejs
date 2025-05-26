@@ -1,4 +1,4 @@
-<%- include('layout', { 
+<% include layout { 
     pageTitle: 'Manage Firewall Rules', 
     user: typeof user !== 'undefined' ? user : null, 
     currentPath: '/rules',
@@ -15,7 +15,7 @@
                 </p>
             <% } %>
 
-            <%- /* Section for Flash Messages - if not handled globally in layout by _flash_messages.ejs already */ %>
+            <%# /* Section for Flash Messages - if not handled globally in layout by _flash_messages.ejs already */ %>
             <% if (locals.flash_error) { %><div class="alert alert-danger"><%= flash_error %></div><% } %>
             <% if (locals.flash_success) { %><div class="alert alert-success"><%= flash_success %></div><% } %>
 
@@ -173,4 +173,4 @@
             .status-timer { color: #007bff; }
         </style>
     `
-}) %>
+} %>
