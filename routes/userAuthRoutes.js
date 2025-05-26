@@ -4,6 +4,31 @@ const passport = require('passport'); // For Google linking
 const authService = require('../services/authService');
 const { isAuthenticated } = require('../middleware/authMiddleware'); // To protect linking routes
 
+// GET /login - Display login page
+router.get('/login', (req, res) => {
+    // The 'is_google_oauth_configured' variable should be available from res.locals if set by app.js middleware
+    // If not, it needs to be explicitly fetched or passed.
+    // For now, assume it's available or views handle its absence.
+    res.render('login', { 
+        pageTitle: 'Login',
+        // Pass any necessary variables for the login.ejs template,
+        // like is_google_oauth_configured, which is used in the template.
+        // These are typically set globally in app.js for all views.
+        // We can rely on res.locals set by the context processor in app.js
+    });
+});
+
+// GET /register - Display registration page
+router.get('/register', (req, res) => {
+    res.render('register', { 
+        pageTitle: 'Register',
+        // Pass any necessary variables for the register.ejs template
+        // For example, if you want to pass back input values on validation error:
+        // input: req.session.input || {} // Clear after use if needed
+    });
+    // if (req.session.input) delete req.session.input; // Example cleanup
+});
+
 // POST /register - User registration
 router.post('/register', async (req, res) => {
     const { email, password, displayName, confirmPassword } = req.body;

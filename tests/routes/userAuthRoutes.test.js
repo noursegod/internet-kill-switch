@@ -2,6 +2,7 @@ const request = require('supertest');
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport'); // Required for req.logIn and session initialization
+const path = require('path'); // Added for view path
 const userAuthRoutes = require('../../routes/userAuthRoutes');
 const authService = require('../../services/authService');
 const { isAuthenticated } = require('../../middleware/authMiddleware');
@@ -53,16 +54,28 @@ passport.deserializeUser((id, done) => done(null, { id: id, email: 'testuser@exa
 app.use((req, res, next) => {
     res.locals.sessionFlashMessages = req.session.flashMessages;
     delete req.session.flashMessages;
+
+    // Mock global variables typically set by other middleware for views
+    res.locals.user = req.user || null;
+    res.locals.currentPath = req.path;
+    res.locals.is_google_oauth_configured = true; // Assume true for testing views that use it
+    res.locals.is_app_secret_key_configured = true;
+    res.locals.is_opnsense_fully_configured = true;
+    res.locals.queryMessages = {};
+    
     next();
 });
+
+// Setup view engine for testing routes that render views
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '../../views'));
 
 
 app.use('/auth', userAuthRoutes);
 
 // Dummy route for redirect checks
 app.get('/', (req, res) => res.send('Home Page'));
-app.get('/auth/login', (req, res) => res.send('Login Page')); // Mock login page for redirects
-app.get('/auth/register', (req, res) => res.send('Register Page')); // Mock register page
+// Removed mock app.get('/auth/login') and app.get('/auth/register')
 
 describe('User Authentication Routes', () => {
 
@@ -73,6 +86,25 @@ describe('User Authentication Routes', () => {
              if (req.user) return next();
              req.session.flashMessages = { type: 'error', message: 'Mock: You must be logged in.' };
              res.redirect('/auth/login');
+        });
+    });
+
+    describe('GET /auth/login', () => {
+        test('should return 200 OK and render login page', async () => {
+            const response = await request(app).get('/auth/login');
+            expect(response.statusCode).toBe(200);
+            // Check for a unique piece of text from your login.ejs
+            // This makes the test more robust than just checking for 'Login'
+            expect(response.text).toContain('Login to manage your OPNsense firewall rules'); 
+        });
+    });
+
+    describe('GET /auth/register', () => {
+        test('should return 200 OK and render registration page', async () => {
+            const response = await request(app).get('/auth/register');
+            expect(response.statusCode).toBe(200);
+            // Check for a unique piece of text from your register.ejs
+            expect(response.text).toContain('Create a new account'); 
         });
     });
 
