@@ -3,12 +3,13 @@
     user: typeof user !== 'undefined' ? user : null, 
     currentPath: '/auth/login', // Updated currentPath
     // sessionFlashMessages is available globally via app.locals or context processor in app.js
-    body: `
+} %>
+
         <div class="auth-container">
             <h2>Login</h2>
             <p>Please log in to manage your OPNsense firewall rules.</p>
 
-            <%- include('partials/_flash_messages') %> <% /* Flash messages will be rendered here if any */ %>
+            <% include('partials/_flash_messages') %> <% /* Flash messages will be rendered here if any */ %>
 
             <form action="/auth/login" method="POST" class="auth-form">
                 <div class="form-group">
@@ -39,7 +40,7 @@
             <hr style="margin-top: 30px; margin-bottom: 20px;">
             <h4>Configuration Status Overview:</h4>
             <p><small>This section is for diagnostic purposes.</small></p>
-            <%- include('partials/_config_status', {
+            <% include('partials/_config_status', {
                 is_app_secret_key_configured: typeof is_app_secret_key_configured !== 'undefined' ? is_app_secret_key_configured : false,
                 is_opnsense_fully_configured: typeof is_opnsense_fully_configured !== 'undefined' ? is_opnsense_fully_configured : false,
                 is_google_oauth_configured: typeof is_google_oauth_configured !== 'undefined' ? is_google_oauth_configured : false
@@ -58,5 +59,3 @@
             .or-separator::before, .or-separator::after { content: ''; flex: 1; border-bottom: 1px solid #ccc; }
             .auth-switch-link { margin-top: 20px; }
         </style>
-    `
-} %>

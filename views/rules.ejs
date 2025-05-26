@@ -3,8 +3,9 @@
     user: typeof user !== 'undefined' ? user : null, 
     currentPath: '/rules',
     messages: typeof messages !== 'undefined' ? messages : {},
-    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {},
-    body: `
+    queryMessages: typeof queryMessages !== 'undefined' ? queryMessages : {}
+} %>
+
         <div class="rules-container">
             <h2>OPNsense Firewall Rule Management</h2>
 
@@ -172,5 +173,3 @@
             .status-error { color: #b30000; font-weight: bold; }
             .status-timer { color: #007bff; }
         </style>
-    `
-} %>
