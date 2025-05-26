@@ -36,7 +36,7 @@
     "mounts": [
         "source=${localEnv:HOME}${localEnv:USERPROFILE}/.npm-devcontainer,target=/home/node/.npm,type=bind,consistency=cached"
     ],
-    
+    "postStartCommand": "npm start",
     // Use 'postStartCommand' to run commands after the container has started.
     // "postStartCommand": "npm run dev", // If you have a dev script to auto-restart
 
