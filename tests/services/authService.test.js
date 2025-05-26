@@ -1,16 +1,24 @@
-const { initializePassport } = require('../../services/authService');
+const { initializePassport, registerUser, loginUser, linkGoogleToExistingUser, setPasswordForUser } = require('../../services/authService');
 const userRepository = require('../../db/database'); // Mock this module
 const passport = require('passport');
 
 // Mock the entire db/database.js module
 jest.mock('../../db/database', () => ({
+    // Existing mocks...
     findOrCreateUserByGoogleId: jest.fn(),
     getUserById: jest.fn(),
     countUsers: jest.fn(),
     promoteUserToAdmin: jest.fn(),
     getInvitationByCode: jest.fn(),
     markInvitationAsUsed: jest.fn(),
-    findUserByGoogleId: jest.fn(), // Ensure this is mocked
+    findUserByGoogleId: jest.fn(),
+    // New mocks for username/password auth
+    createUser: jest.fn(),
+    findUserByEmail: jest.fn(),
+    verifyPassword: jest.fn(),
+    linkGoogleAccount: jest.fn(),
+    setUserPassword: jest.fn(),
+    getDB: jest.fn().mockReturnValue({ prepare: jest.fn().mockReturnValue({ run: jest.fn() }) }), // Mock for getDB used in loginUser
 }));
 
 // Mock passport's core functions
@@ -104,7 +112,11 @@ describe('Auth Service - Passport Configuration', () => {
             displayName: 'Test User',
             emails: [{ value: 'test@example.com' }],
         };
-        const mockReq = { session: {} }; // Mock request object with session
+        // Default mockReq for non-linking flow
+        const mockReq = { 
+            session: {},
+            query: {} // Ensure query object exists
+        };
         const mockAccessToken = 'access-token';
         const mockRefreshToken = 'refresh-token';
         const mockDone = jest.fn();
@@ -130,27 +142,25 @@ describe('Auth Service - Passport Configuration', () => {
             }
         });
 
-        test('should find and return existing user', async () => {
+        test('should find and return existing user (standard login)', async () => {
             const existingUser = { ...mockProfile, id: 1, google_id: mockProfile.id, email: mockProfile.emails[0].value, is_admin: false };
-            userRepository.findUserByGoogleId.mockResolvedValue(existingUser);
-            // findOrCreateUserByGoogleId will be called by the strategy if findUserByGoogleId returns a user (for updates)
             userRepository.findOrCreateUserByGoogleId.mockResolvedValue(existingUser); 
 
             await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
             
-            expect(userRepository.findUserByGoogleId).toHaveBeenCalledWith(mockProfile.id);
-            expect(userRepository.findOrCreateUserByGoogleId).toHaveBeenCalledWith(expect.objectContaining({ googleId: mockProfile.id }));
+            expect(userRepository.findOrCreateUserByGoogleId).toHaveBeenCalledWith(expect.objectContaining({ 
+                googleId: mockProfile.id,
+                email: mockProfile.emails[0].value 
+            }));
             expect(mockDone).toHaveBeenCalledWith(null, existingUser);
         });
 
-        test('should create new user and promote if first user (OOBE)', async () => {
-            userRepository.findUserByGoogleId.mockResolvedValue(null); // No existing user
-            userRepository.countUsers.mockResolvedValue(0); // This is the first user
+        test('should create new user and promote if first user (OOBE - standard login)', async () => {
+            userRepository.countUsers.mockResolvedValue(1); // After creation, this will be the first user
             const newUser = { id: 1, google_id: mockProfile.id, email: mockProfile.emails[0].value, displayName: mockProfile.displayName, is_admin: false };
-            const adminUser = { ...newUser, is_admin: true };
-            userRepository.findOrCreateUserByGoogleId.mockResolvedValue(newUser);
-            userRepository.promoteUserToAdmin.mockResolvedValue(1); // Assume success
-            userRepository.getUserById.mockResolvedValue(adminUser); // Simulate re-fetch after promotion
+            userRepository.findOrCreateUserByGoogleId.mockResolvedValue(newUser); // Simulates user creation
+            userRepository.promoteUserToAdmin.mockResolvedValue(1); 
+            // No need to mock getUserById for re-fetch here as the callback itself updates user.is_admin
 
             await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
 
@@ -159,15 +169,12 @@ describe('Auth Service - Passport Configuration', () => {
             expect(mockDone).toHaveBeenCalledWith(null, expect.objectContaining({ is_admin: true }));
         });
         
-        test('should promote user if ADMIN_USER_GOOGLE_ID matches', async () => {
+        test('should promote user if ADMIN_USER_GOOGLE_ID matches (standard login)', async () => {
             process.env.ADMIN_USER_GOOGLE_ID = mockProfile.id;
-            userRepository.findUserByGoogleId.mockResolvedValue(null);
             userRepository.countUsers.mockResolvedValue(5); // Not the first user
             const newUser = { id: 2, google_id: mockProfile.id, email: mockProfile.emails[0].value, displayName: mockProfile.displayName, is_admin: false };
-            const adminUser = { ...newUser, is_admin: true };
             userRepository.findOrCreateUserByGoogleId.mockResolvedValue(newUser);
             userRepository.promoteUserToAdmin.mockResolvedValue(1);
-            userRepository.getUserById.mockResolvedValue(adminUser);
 
             await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
             expect(userRepository.promoteUserToAdmin).toHaveBeenCalledWith(newUser.id);
@@ -175,59 +182,211 @@ describe('Auth Service - Passport Configuration', () => {
             delete process.env.ADMIN_USER_GOOGLE_ID; // Clean up env var
         });
 
+        // Invitation logic is simplified in the new Google callback, so these tests are removed/adjusted.
+        // The new callback primarily relies on findOrCreateUserByGoogleId and OOBE admin promotion.
+        // No explicit invitation check in Google strategy anymore.
 
-        test('should require invitation for new user if not first or admin by env', async () => {
-            userRepository.findUserByGoogleId.mockResolvedValue(null);
-            userRepository.countUsers.mockResolvedValue(5); // Not first user
-            // No ADMIN_USER_GOOGLE_ID set for this profile.id
-
-            mockReq.session.invitationCode = null; // No invitation code in session
-
-            await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
-            
-            expect(mockDone).toHaveBeenCalledWith(null, false, { message: 'Invitation code required for new users.' });
-        });
-
-        test('should fail if invitation code is invalid or used', async () => {
-            userRepository.findUserByGoogleId.mockResolvedValue(null);
-            userRepository.countUsers.mockResolvedValue(5);
-            mockReq.session.invitationCode = 'invalid-code';
-            userRepository.getInvitationByCode.mockResolvedValue(null); // Invalid code
-
-            await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
-            expect(mockDone).toHaveBeenCalledWith(null, false, { message: 'Invalid or used invitation code.' });
-
-            userRepository.getInvitationByCode.mockResolvedValue({ code: 'used-code', is_used: true }); // Used code
-            await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
-            expect(mockDone).toHaveBeenCalledWith(null, false, { message: 'Invalid or used invitation code.' });
-        });
-
-        test('should create new user with valid invitation code', async () => {
-            userRepository.findUserByGoogleId.mockResolvedValue(null);
-            userRepository.countUsers.mockResolvedValue(5);
-            mockReq.session.invitationCode = 'valid-code';
-            const mockInvitation = { code: 'valid-code', is_used: false, id: 1 };
-            userRepository.getInvitationByCode.mockResolvedValue(mockInvitation);
-            const newUser = { id: 3, google_id: mockProfile.id, email: mockProfile.emails[0].value, displayName: mockProfile.displayName, is_admin: false };
-            userRepository.findOrCreateUserByGoogleId.mockResolvedValue(newUser);
-            userRepository.markInvitationAsUsed.mockResolvedValue(1);
-            mockReq.session.save = jest.fn(cb => cb()); // Mock session.save
-
-            await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, mockProfile, mockDone);
-
-            expect(userRepository.getInvitationByCode).toHaveBeenCalledWith('valid-code');
-            expect(userRepository.findOrCreateUserByGoogleId).toHaveBeenCalledWith(expect.objectContaining({ googleId: mockProfile.id }));
-            expect(userRepository.markInvitationAsUsed).toHaveBeenCalledWith('valid-code', newUser.id);
-            expect(mockReq.session.invitationCode).toBeUndefined(); // Should be deleted
-            expect(mockDone).toHaveBeenCalledWith(null, newUser);
-        });
-        
-        test('should handle missing email in profile', async () => {
+        test('should handle missing email in profile (standard login)', async () => {
             const profileNoEmail = { ...mockProfile, emails: null };
             await mockGoogleStrategyCallback(mockReq, mockAccessToken, mockRefreshToken, profileNoEmail, mockDone);
             expect(mockDone).toHaveBeenCalledWith(expect.any(Error), null);
             expect(mockDone.mock.calls[0][0].message).toBe("Email not provided by Google profile.");
         });
 
+        // Tests for account linking flow
+        test('GoogleStrategy callback should link account if state is "linking" and user is authenticated', async () => {
+            const linkingReq = { 
+                query: { state: 'linking' }, 
+                user: { id: 1, email: 'localuser@example.com' }, // Existing logged-in user
+                session: { linkingUserId: 1 } 
+            };
+            const googleProfileForLink = { id: 'google789', emails: [{ value: 'localuser@example.com' }], displayName: 'Local User Google' };
+            const updatedUserAfterLink = { ...linkingReq.user, google_id: 'google789', display_name: 'Local User Google' };
+
+            userRepository.linkGoogleAccount.mockResolvedValue(1); // Assume success
+            userRepository.getUserById.mockResolvedValue(updatedUserAfterLink); // Mock user refresh
+
+            await mockGoogleStrategyCallback(linkingReq, mockAccessToken, mockRefreshToken, googleProfileForLink, mockDone);
+
+            expect(userRepository.linkGoogleAccount).toHaveBeenCalledWith({
+                userId: linkingReq.user.id,
+                googleId: googleProfileForLink.id,
+                googleEmail: googleProfileForLink.emails[0].value,
+                googleDisplayName: googleProfileForLink.displayName
+            });
+            expect(userRepository.getUserById).toHaveBeenCalledWith(linkingReq.user.id);
+            expect(linkingReq.session.linkingUserId).toBeUndefined(); // Should be cleaned up
+            expect(mockDone).toHaveBeenCalledWith(null, updatedUserAfterLink);
+        });
+
+        test('GoogleStrategy callback should fail linking if session linkingUserId does not match req.user.id', async () => {
+            const linkingReq = { 
+                query: { state: 'linking' }, 
+                user: { id: 1 }, 
+                session: { linkingUserId: 2 } // Mismatch
+            };
+            const googleProfileForLink = { id: 'google789', emails: [{ value: 'localuser@example.com' }], displayName: 'Local User Google' };
+            await mockGoogleStrategyCallback(linkingReq, mockAccessToken, mockRefreshToken, googleProfileForLink, mockDone);
+            expect(mockDone).toHaveBeenCalledWith(null, false, { message: 'User session error during Google account linking. Please try logging in again.' });
+        });
+
+        test('GoogleStrategy callback should handle errors from linkGoogleAccount', async () => {
+            const linkingReq = { 
+                query: { state: 'linking' }, 
+                user: { id: 1, email: 'localuser@example.com' },
+                session: { linkingUserId: 1 } 
+            };
+            const googleProfileForLink = { id: 'google789', emails: [{ value: 'localuser@example.com' }], displayName: 'Local User Google' };
+            const linkError = new Error("DB unique constraint failed");
+            userRepository.linkGoogleAccount.mockRejectedValue(linkError);
+
+            await mockGoogleStrategyCallback(linkingReq, mockAccessToken, mockRefreshToken, googleProfileForLink, mockDone);
+            expect(mockDone).toHaveBeenCalledWith(null, false, { message: `Failed to link Google account: ${linkError.message}` });
+        });
+    });
+});
+
+
+describe('Auth Service - Username/Password', () => {
+    beforeEach(() => {
+        // Reset relevant mocks from userRepository before each test in this block
+        userRepository.createUser.mockReset();
+        userRepository.findUserByEmail.mockReset();
+        userRepository.verifyPassword.mockReset();
+        // Check if getDB and subsequent calls are actual mocks before trying to reset
+        if (jest.isMockFunction(userRepository.getDB().prepare().run)) {
+             userRepository.getDB().prepare().run.mockReset();
+        }
+        if (jest.isMockFunction(userRepository.getDB().prepare)) {
+            userRepository.getDB().prepare.mockReset();
+        }
+         if (jest.isMockFunction(userRepository.getDB)) {
+            userRepository.getDB.mockReset();
+            // Re-establish the mock structure for getDB for subsequent tests in this block if needed
+            userRepository.getDB.mockReturnValue({ prepare: jest.fn().mockReturnValue({ run: jest.fn() }) });
+        }
+        userRepository.linkGoogleAccount.mockReset();
+        userRepository.setUserPassword.mockReset();
+        userRepository.getUserById.mockReset();
+    });
+
+    describe('registerUser', () => {
+        test('should register a new user successfully', async () => {
+            const userData = { email: 'newuser@example.com', password: 'password123', displayName: 'New User' };
+            const mockNewUser = { id: 1, ...userData, password: 'hashedpassword' }; // createUser returns the user object
+            userRepository.createUser.mockResolvedValue(mockNewUser);
+            
+            const result = await registerUser(userData);
+            expect(userRepository.createUser).toHaveBeenCalledWith(userData);
+            expect(result).toEqual(mockNewUser);
+        });
+
+        test('should throw error if email or password not provided', async () => {
+            await expect(registerUser({ email: 'test@example.com', password: '' })).rejects.toThrow('Email and password are required.');
+            await expect(registerUser({ email: '', password: 'password123' })).rejects.toThrow('Email and password are required.');
+        });
+        
+        test('should throw error if password is too short', async () => {
+            await expect(registerUser({ email: 'test@example.com', password: 'short' })).rejects.toThrow('Password must be at least 8 characters long.');
+        });
+
+        test('should throw error if createUser fails (e.g., email exists)', async () => {
+            userRepository.createUser.mockRejectedValue(new Error('User already exists'));
+            await expect(registerUser({ email: 'exists@example.com', password: 'password123' })).rejects.toThrow('Registration failed: User already exists');
+        });
+    });
+
+    describe('loginUser', () => {
+        const loginCredentials = { email: 'test@example.com', password: 'password123' };
+        const mockUser = { id: 1, email: 'test@example.com', password: 'hashedpassword', is_admin: false };
+
+        beforeEach(() => {
+            // Ensure getDB().prepare().run() is freshly mocked for each loginUser test
+            const mockStatement = { run: jest.fn() };
+            const mockPrepare = jest.fn().mockReturnValue(mockStatement);
+            userRepository.getDB.mockReturnValue({ prepare: mockPrepare });
+        });
+
+        test('should login user successfully', async () => {
+            userRepository.findUserByEmail.mockResolvedValue(mockUser);
+            userRepository.verifyPassword.mockResolvedValue(true);
+            
+            const { password, ...expectedUserWithoutPassword } = mockUser;
+            const result = await loginUser(loginCredentials);
+            
+            expect(userRepository.findUserByEmail).toHaveBeenCalledWith(loginCredentials.email);
+            expect(userRepository.verifyPassword).toHaveBeenCalledWith(loginCredentials.password, mockUser.password);
+            expect(userRepository.getDB().prepare).toHaveBeenCalledWith('UPDATE Users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?');
+            expect(userRepository.getDB().prepare().run).toHaveBeenCalledWith(mockUser.id);
+            expect(result).toEqual(expectedUserWithoutPassword);
+        });
+        
+        test('should throw error for missing email or password', async () => {
+            await expect(loginUser({ email: 'test@example.com', password: ''})).rejects.toThrow('Email and password are required for login.');
+        });
+
+        test('should throw error if user not found', async () => {
+            userRepository.findUserByEmail.mockResolvedValue(undefined);
+            await expect(loginUser(loginCredentials)).rejects.toThrow('Invalid email or password.');
+        });
+
+        test('should throw error if password is not set for user', async () => {
+            userRepository.findUserByEmail.mockResolvedValue({ ...mockUser, password: null });
+            await expect(loginUser(loginCredentials)).rejects.toThrow('No password set for this account.');
+        });
+        
+        test('should throw error for incorrect password', async () => {
+            userRepository.findUserByEmail.mockResolvedValue(mockUser);
+            userRepository.verifyPassword.mockResolvedValue(false);
+            await expect(loginUser(loginCredentials)).rejects.toThrow('Invalid email or password.');
+        });
+    });
+    
+    describe('linkGoogleToExistingUser', () => {
+        const linkData = { userId: 1, googleId: 'google123', googleEmail: 'user@example.com', googleDisplayName: 'User Google' };
+        const mockUser = { id: 1, email: 'user@example.com', google_id: 'google123' };
+
+        test('should link Google account successfully', async () => {
+            userRepository.linkGoogleAccount.mockResolvedValue(1); // Assume success returns number of rows changed
+            userRepository.getUserById.mockResolvedValue(mockUser);
+            
+            const result = await linkGoogleToExistingUser(linkData);
+            expect(userRepository.linkGoogleAccount).toHaveBeenCalledWith(linkData);
+            expect(userRepository.getUserById).toHaveBeenCalledWith(linkData.userId);
+            expect(result).toEqual(mockUser);
+        });
+
+        test('should throw error for missing parameters', async () => {
+            await expect(linkGoogleToExistingUser({ userId: 1, googleId: 'g123', googleEmail: '' })).rejects.toThrow('User ID, Google ID, and Google Email are required for linking.');
+        });
+
+        test('should throw error if linkGoogleAccount fails', async () => {
+            userRepository.linkGoogleAccount.mockRejectedValue(new Error('DB constraint failed'));
+            await expect(linkGoogleToExistingUser(linkData)).rejects.toThrow('Failed to link Google account: DB constraint failed');
+        });
+    });
+
+    describe('setPasswordForUser', () => {
+        const setData = { userId: 1, password: 'newPassword123' };
+
+        test('should set password successfully', async () => {
+            userRepository.setUserPassword.mockResolvedValue(1); // Assume success
+            const result = await setPasswordForUser(setData);
+            expect(userRepository.setUserPassword).toHaveBeenCalledWith(setData);
+            expect(result).toEqual({ success: true, message: "Password updated successfully." });
+        });
+
+        test('should throw error for missing parameters', async () => {
+            await expect(setPasswordForUser({ userId: 1, password: '' })).rejects.toThrow('User ID and new password are required.');
+        });
+        
+        test('should throw error if password is too short', async () => {
+            await expect(setPasswordForUser({ userId: 1, password: 'short' })).rejects.toThrow('Password must be at least 8 characters long.');
+        });
+
+        test('should throw error if setUserPassword fails', async () => {
+            userRepository.setUserPassword.mockRejectedValue(new Error('User not found'));
+            await expect(setPasswordForUser(setData)).rejects.toThrow('Failed to set password: User not found');
+        });
     });
 });

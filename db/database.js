@@ -1,6 +1,8 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcrypt');
+const BCRYPT_SALT_ROUNDS = 10; // Define salt rounds for bcrypt
 
 // Determine the database path. Prioritize environment variable, then default.
 // Ensure the path is absolute or correctly relative to the project root.
@@ -210,9 +212,14 @@ module.exports = {
     updateManagedRuleTimer,
     getExpiredTimerRules, // This is the actual function name in the code
     // User and OOBE functions
-    findOrCreateUserByGoogleId,
+    findOrCreateUserByGoogleId, // Ensure this is the updated version
     getUserById,
     countUsers,
+    createUser,
+    findUserByEmail,
+    verifyPassword,
+    linkGoogleAccount,
+    setUserPassword,
     promoteUserToAdmin,
     // Invitation functions
     createInvitationCode,
@@ -315,46 +322,65 @@ function getAllSettings() {
 function findOrCreateUserByGoogleId({ googleId, email, displayName }) {
     const db = getDB();
     try {
-        // Try to find the user first
-        let stmt = db.prepare('SELECT * FROM Users WHERE google_id = ?');
-        let user = stmt.get(googleId);
+        // Check if a user exists with the provided email
+        let user = db.prepare('SELECT * FROM Users WHERE email = ?').get(email);
 
         if (user) {
-            // Optionally update email or display_name if they've changed
-            if ((email && user.email !== email) || (displayName && user.display_name !== displayName)) {
-                const updateStmt = db.prepare(
-                    'UPDATE Users SET email = ?, display_name = ?, last_login_at = CURRENT_TIMESTAMP WHERE id = ?'
-                );
-                updateStmt.run(email || user.email, displayName || user.display_name, user.id);
-                user.email = email || user.email; // Reflect changes in the returned object
-                user.display_name = displayName || user.display_name;
-                console.log(`User ${user.id} (GoogleID: ${googleId}) updated.`);
-            } else {
-                 // Just update last_login_at
-                const updateLoginStmt = db.prepare('UPDATE Users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?');
-                updateLoginStmt.run(user.id);
-                console.log(`User ${user.id} (GoogleID: ${googleId}) found. Updated last login.`);
+            // User with this email exists. Link Google ID if not already linked.
+            if (!user.google_id) {
+                const stmt = db.prepare('UPDATE Users SET google_id = ?, display_name = COALESCE(?, display_name), last_login_at = CURRENT_TIMESTAMP WHERE id = ?');
+                stmt.run(googleId, displayName, user.id);
+                console.log(`Linked Google ID ${googleId} to existing user ${user.email} (ID: ${user.id}).`);
+                user.google_id = googleId; // Update in-memory object
+                if (displayName) user.display_name = displayName;
+            } else if (user.google_id !== googleId) {
+                // This email is associated with a DIFFERENT Google ID. This is a conflict.
+                console.error(`Conflict: Email ${email} is already linked to a different Google ID.`);
+                throw new Error(`Email ${email} is already linked to a different Google account.`);
             }
-            return { ...user, is_admin: !!user.is_admin }; // Ensure boolean conversion
+            // Update display name if provided and different, and last login
+            const updateStmt = db.prepare('UPDATE Users SET display_name = COALESCE(?, display_name), last_login_at = CURRENT_TIMESTAMP WHERE id = ?');
+            updateStmt.run(displayName, user.id);
+            if (displayName) user.display_name = displayName;
+            
+            console.log(`User ${user.email} (ID: ${user.id}) logged in with Google. Updated last login and display name if changed.`);
+            return { ...user, is_admin: !!user.is_admin };
         } else {
-            // User not found, create a new one
-            if (!email) { // Email is NOT NULL in schema
-                console.error("findOrCreateUserByGoogleId: Email is required to create a new user.");
+            // No user with this email. Check if googleId is already in use (should be rare if email is primary check now)
+            user = db.prepare('SELECT * FROM Users WHERE google_id = ?').get(googleId);
+            if (user) {
+                // A user exists with this google_id but a different email. This is unusual.
+                // Update their email if it's provided and different.
+                if (email && user.email !== email) {
+                    console.warn(`User with Google ID ${googleId} exists but has a different email (${user.email}). Updating to ${email}.`);
+                    const stmt = db.prepare('UPDATE Users SET email = ?, display_name = COALESCE(?, display_name), last_login_at = CURRENT_TIMESTAMP WHERE google_id = ?');
+                    stmt.run(email, displayName, googleId);
+                    user.email = email;
+                } else {
+                   const stmt = db.prepare('UPDATE Users SET last_login_at = CURRENT_TIMESTAMP, display_name = COALESCE(?, display_name) WHERE google_id = ?');
+                   stmt.run(displayName, googleId);
+                }
+                if (displayName) user.display_name = displayName;
+                console.log(`User with Google ID ${googleId} logged in. Email updated if necessary.`);
+                return { ...user, is_admin: !!user.is_admin };
+            }
+
+            // New user: Neither email nor googleId found.
+            if (!email) {
+                console.error("findOrCreateUserByGoogleId: Email is required to create a new user from Google profile.");
                 throw new Error("Email is required to create a new user.");
             }
-            stmt = db.prepare(
+            const stmt = db.prepare(
                 'INSERT INTO Users (google_id, email, display_name, created_at, last_login_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
             );
             const info = stmt.run(googleId, email, displayName);
-            console.log(`New user created with ID: ${info.lastInsertRowid} (GoogleID: ${googleId})`);
-            // Fetch the newly created user to return it (including defaults like is_admin)
-            const newUserStmt = db.prepare('SELECT * FROM Users WHERE id = ?');
-            const newUser = newUserStmt.get(info.lastInsertRowid);
-            return { ...newUser, is_admin: !!newUser.is_admin }; // Ensure boolean conversion
+            console.log(`New user created with ID: ${info.lastInsertRowid} (Email: ${email}, GoogleID: ${googleId})`);
+            const newUser = db.prepare('SELECT * FROM Users WHERE id = ?').get(info.lastInsertRowid);
+            return { ...newUser, is_admin: !!newUser.is_admin };
         }
     } catch (error) {
-        console.error(`Error in findOrCreateUserByGoogleId (GoogleID: ${googleId}):`, error);
-        throw error; // Re-throw
+        console.error(`Error in findOrCreateUserByGoogleId (Email: ${email}, GoogleID: ${googleId}):`, error);
+        throw error;
     }
 }
 
@@ -371,6 +397,105 @@ function findUserByGoogleId(googleId) {
         return user ? { ...user, is_admin: !!user.is_admin } : undefined;
     } catch (error) {
         console.error(`Error in findUserByGoogleId (GoogleID: ${googleId}):`, error);
+        throw error;
+    }
+}
+
+async function createUser({ email, password, displayName = null }) {
+    const db = getDB();
+    try {
+        let existingUser = db.prepare('SELECT * FROM Users WHERE email = ?').get(email);
+        if (existingUser) {
+            throw new Error('User with this email already exists.');
+        }
+
+        const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+        const stmt = db.prepare(
+            'INSERT INTO Users (email, password, display_name, created_at, last_login_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+        );
+        const info = stmt.run(email, hashedPassword, displayName);
+        console.log(`New user created with ID: ${info.lastInsertRowid} (Email: ${email})`);
+        const newUser = db.prepare('SELECT * FROM Users WHERE id = ?').get(info.lastInsertRowid);
+        return { ...newUser, is_admin: !!newUser.is_admin };
+    } catch (error) {
+        console.error(`Error in createUser (Email: ${email}):`, error);
+        throw error;
+    }
+}
+
+function findUserByEmail(email) {
+    const db = getDB();
+    try {
+        const stmt = db.prepare('SELECT * FROM Users WHERE email = ?');
+        const user = stmt.get(email);
+        return user ? { ...user, is_admin: !!user.is_admin } : undefined;
+    } catch (error) {
+        console.error(`Error in findUserByEmail (Email: ${email}):`, error);
+        throw error;
+    }
+}
+
+async function verifyPassword(candidatePassword, hashedPassword) {
+    if (!hashedPassword) { // User might exist via OAuth but has no local password set
+       return false;
+    }
+    return await bcrypt.compare(candidatePassword, hashedPassword);
+}
+
+function linkGoogleAccount({ userId, googleId, googleEmail, googleDisplayName }) {
+    const db = getDB();
+    try {
+        // Check if this Google ID is already linked to another account
+        const existingGoogleLink = db.prepare('SELECT * FROM Users WHERE google_id = ? AND id != ?').get(googleId, userId);
+        if (existingGoogleLink) {
+            throw new Error('This Google account is already linked to another user.');
+        }
+
+        // Check if the googleEmail is linked to another account (other than the current userId's existing email)
+        const userByGoogleEmail = db.prepare('SELECT * FROM Users WHERE email = ? AND id != ?').get(googleEmail, userId);
+        if (userByGoogleEmail && userByGoogleEmail.google_id && userByGoogleEmail.google_id !== googleId) {
+            throw new Error(`The email ${googleEmail} is associated with a different Google account.`);
+        }
+         // If the target user's current email is different from googleEmail, and googleEmail is already in use by another user (that is not the current user)
+        const currentUser = db.prepare('SELECT * FROM Users WHERE id = ?').get(userId);
+        if (currentUser.email !== googleEmail) {
+           const conflictingEmailUser = db.prepare('SELECT * FROM Users WHERE email = ? AND id != ?').get(googleEmail, userId);
+           if (conflictingEmailUser) {
+               throw new Error(`The email ${googleEmail} from Google is already in use by another account.`);
+           }
+        }
+
+
+        const stmt = db.prepare(
+            'UPDATE Users SET google_id = ?, email = ?, display_name = COALESCE(?, display_name), last_login_at = CURRENT_TIMESTAMP WHERE id = ?'
+        );
+        // We update the user's email to the Google email, as it's verified by Google.
+        // COALESCE is used for display_name to keep existing if Google one is null/empty.
+        const info = stmt.run(googleId, googleEmail, googleDisplayName, userId);
+        if (info.changes === 0) {
+            throw new Error('User not found or no changes made.');
+        }
+        console.log(`Linked Google ID ${googleId} to user ID ${userId}. Email updated to ${googleEmail}.`);
+        return info.changes;
+    } catch (error) {
+        console.error(`Error in linkGoogleAccount (UserID: ${userId}, GoogleID: ${googleId}):`, error);
+        throw error;
+    }
+}
+
+async function setUserPassword({ userId, password }) {
+    const db = getDB();
+    try {
+        const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+        const stmt = db.prepare('UPDATE Users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+        const info = stmt.run(hashedPassword, userId);
+        if (info.changes === 0) {
+            throw new Error('User not found or password not updated.');
+        }
+        console.log(`Password updated for user ID ${userId}.`);
+        return info.changes;
+    } catch (error) {
+        console.error(`Error in setUserPassword (UserID: ${userId}):`, error);
         throw error;
     }
 }

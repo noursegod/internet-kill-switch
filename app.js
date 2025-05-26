@@ -197,10 +197,13 @@ app.use(passport.session());
 // --- Setup Redirect Middleware ---
 function redirectToSetup(req, res, next) {
     const allowedSetupPaths = [
-        '/setup',               // Allows GET and POST to /setup itself
-        '/auth/google',         // Google OAuth start
-        '/auth/google/callback',// Google OAuth callback
-        '/auth/logout',         // Allow logging out
+        '/setup',
+        '/auth/login',         // Allow access to login page
+        '/auth/register',      // Allow access to registration page
+        '/auth/google',
+        '/auth/google/callback',
+        // '/auth/logout', // Logout might not be strictly needed before setup, but can be included
+        // Ensure any static assets for these pages are also accessible
         // Static assets like CSS/JS for the setup page are typically served by express.static
         // *before* this middleware. If express.static finds and serves the file,
         // this middleware won't be reached for that request.
@@ -271,6 +274,7 @@ app.use((req, res, next) => {
 
 // --- Mount Routes ---
 const authRoutes = require('./routes/authRoutes');
+const userAuthRoutes = require('./routes/userAuthRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const uiRoutes = require('./routes/uiRoutes');
 const scheduleRoutes = require('./routes/scheduleRoutes');
@@ -278,7 +282,8 @@ const setupRoutes = require('./routes/setupRoutes'); // Import new setup routes
 
 
 app.use('/setup', setupRoutes); // Use new setup routes
-app.use('/auth', authRoutes);
+app.use('/auth', userAuthRoutes); // Handles /auth/register, /auth/login, /auth/logout, /auth/link/google etc.
+app.use('/auth', authRoutes); // This will still handle /auth/google, /auth/google/callback
 app.use('/admin', adminRoutes);
 app.use('/schedules', scheduleRoutes);
 app.use('/', uiRoutes); // Should be last for general paths like '/'

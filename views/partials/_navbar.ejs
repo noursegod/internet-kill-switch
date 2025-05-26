@@ -3,41 +3,32 @@
         <li><a href="/" class="<%= (currentPath === '/') ? 'active' : '' %>">Home</a></li>
         <% if (user) { %>
             <li><a href="/rules" class="<%= (currentPath === '/rules') ? 'active' : '' %>">Managed Rules</a></li>
-            <!-- Add links to Schedules and Timers if those pages exist -->
-            <!-- <li><a href="/schedules">Schedules</a></li> -->
+            <li><a href="/schedules" class="<%= (currentPath === '/schedules') ? 'active' : '' %>">Schedules</a></li>
             <% if (user.is_admin) { %>
-                <li><a href="/admin/invitations" class="<%= (currentPath === '/admin/invitations') ? 'active' : '' %>">Admin Invitations</a></li>
+                <li><a href="/admin/invitations" class="<%= (currentPath === '/admin/invitations') ? 'active' : '' %>">Invitations</a></li>
+                <li><a href="/admin/settings" class="<%= (currentPath === '/admin/settings') ? 'active' : '' %>">Site Settings</a></li>
             <% } %>
-            <li><span>Logged in as: <%= user.displayName || user.email %></span></li>
+            <li>
+                 <span style="color: #ddd;">Welcome, <a href="/user/profile" style="color: #fff; text-decoration: underline;"><%= user.displayName || user.email %></a></span>
+            </li>
             <li>
                 <form action="/auth/logout" method="POST" style="display: inline;">
                     <button type="submit" class="button-link-style">Logout</button>
                 </form>
             </li>
         <% } else { %>
-            <li><a href="/auth/google" class="<%= (currentPath === '/auth/google' || currentPath === '/login') ? 'active' : '' %>">Login with Google</a></li>
+            <li><a href="/auth/login" class="<%= (currentPath === '/auth/login') ? 'active' : '' %>">Login</a></li>
+            <li><a href="/auth/register" class="<%= (currentPath === '/auth/register') ? 'active' : '' %>">Register</a></li>
         <% } %>
     </ul>
 </nav>
 
 <style>
-    /* Basic styling for the navbar and active link */
     nav { background-color: #333; padding: 1em 0; }
     nav ul { list-style-type: none; padding: 0; margin: 0; text-align: center; }
     nav ul li { display: inline; margin-right: 20px; }
     nav ul li a, nav ul li span { color: white; text-decoration: none; }
     nav ul li a:hover, nav ul li a.active { text-decoration: underline; font-weight: bold; }
-    .button-link-style {
-        background: none;
-        border: none;
-        color: white;
-        text-decoration: none;
-        cursor: pointer;
-        padding: 0;
-        font: inherit;
-        display: inline;
-    }
-    .button-link-style:hover {
-        text-decoration: underline;
-    }
+    .button-link-style { background: none; border: none; color: white; text-decoration: none; cursor: pointer; padding: 0; font: inherit; display: inline; }
+    .button-link-style:hover { text-decoration: underline; }
 </style>

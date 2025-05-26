@@ -6,9 +6,9 @@ function isAuthenticated(req, res, next) {
     // For API requests, you might want to return a 401 status code
     if (req.accepts('html')) { // Check if the request prefers HTML
         // Store the original URL to redirect back after login
-        // req.session.returnTo = req.originalUrl; // Requires saveUninitialized:true for anonymous sessions
+        req.session.returnTo = req.originalUrl; // Requires saveUninitialized:true for anonymous sessions
         console.log("isAuthenticated: User not authenticated, redirecting to /login. Original URL:", req.originalUrl);
-        res.redirect('/login?message=unauthenticated');
+        res.redirect('/auth/login?message=unauthenticated');
     } else {
         // For API requests, send a 401 Unauthorized status
         res.status(401).json({ error: 'User not authenticated. Please log in.' });
@@ -25,8 +25,8 @@ function isAdmin(req, res, next) {
             // User is authenticated but not an admin
             console.log(`isAdmin: User ${req.user.email} is not an admin. Access denied.`);
             if (req.accepts('html')) {
-                // req.session.messages = ['Forbidden: You do not have admin privileges.']; // Example if using session for messages
-                res.status(403).send('Forbidden: You do not have admin privileges. <a href="/">Go Home</a>'); // Simple HTML response
+                req.session.flashMessages = { type: 'error', message: 'Forbidden: You do not have admin privileges.' };
+                res.status(403).redirect('/?error=forbidden'); // Redirect to home with error, or a specific forbidden page
             } else {
                 res.status(403).json({ error: 'Forbidden: Admin privileges required.' });
             }
@@ -35,8 +35,8 @@ function isAdmin(req, res, next) {
         // User is not even authenticated
         console.log("isAdmin: User not authenticated. Cannot check admin status.");
          if (req.accepts('html')) {
-            // req.session.returnTo = req.originalUrl;
-            res.redirect('/login?message=unauthenticated_admin_area');
+            req.session.returnTo = req.originalUrl; // Store original URL here too
+            res.redirect('/auth/login?message=unauthenticated_admin_area'); // Corrected redirect to /auth/login
         } else {
             res.status(401).json({ error: 'User not authenticated. Please log in.' });
         }
