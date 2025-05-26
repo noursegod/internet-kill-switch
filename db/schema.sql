@@ -70,3 +70,12 @@ CREATE INDEX IF NOT EXISTS idx_invitations_code ON Invitations(code);
 -- AppSettings: For application-wide settings managed via UI (if any).
 -- RuleTimers: If the timer logic becomes more complex than just fields on ManagedRules.
 -- (The current Python version uses fields on ManagedRule for simplicity of timers)
+
+-- AppSettings Table: Stores general application settings.
+CREATE TABLE IF NOT EXISTS AppSettings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP -- Managed by JS on update
+);
+CREATE INDEX IF NOT EXISTS idx_appsettings_key ON AppSettings(key);

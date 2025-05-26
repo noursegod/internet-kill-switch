@@ -1,0 +1,44 @@
+{
+    "name": "Node.js Express App Dev Container",
+    "image": "mcr.microsoft.com/devcontainers/javascript-node:0-18", // Uses Node.js 18
+
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {} // Ensures Git is available
+    },
+
+    // Forward the application port from the container to the host.
+    "forwardPorts": [3000],
+    // If your app runs on a different port, change it here and in app.js/Dockerfile.
+    // You can also use an array: "appPort": [3000, "dbPort: 5432"],
+
+    // Configure VS Code settings specific to this container.
+    "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+    },
+
+    // List of VS Code extensions to install inside the container.
+    "extensions": [
+        "dbaeumer.vscode-eslint",        // ESLint for JavaScript linting
+        "esbenp.prettier-vscode",        // Prettier for code formatting
+        "ms-azuretools.vscode-docker",   // Docker extension for managing Docker resources
+        "streetsidesoftware.code-spell-checker", // Spell checker
+        "humao.rest-client"              // REST Client for API testing (optional)
+    ],
+
+    // Run commands after the container is created.
+    "postCreateCommand": "npm install",
+
+    // Set the workspace folder.
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+    // Add the local OS specific file path to download packages to the OS specific cache path 
+    "mounts": [
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.npm-devcontainer,target=/home/node/.npm,type=bind,consistency=cached"
+    ],
+    
+    // Use 'postStartCommand' to run commands after the container has started.
+    // "postStartCommand": "npm run dev", // If you have a dev script to auto-restart
+
+    // Comment out connectAsUser. More info: https://aka.ms/vscode-remote/containers/non-root.
+    "remoteUser": "node" // Runs the container as the 'node' user from the base image
+}

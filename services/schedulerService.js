@@ -125,37 +125,8 @@ function unscheduleJob(scheduleId) {
     }
 }
 
-async function loadAndScheduleAllActiveJobs() {
-    console.log("schedulerService: Loading and scheduling all active jobs from database...");
-    if (!getOpnsenseService() && (await db.getAllActiveSchedules()).length > 0) {
-        // If there are active schedules that would require OPNsense but it's not configured,
-        // it's better to log a clear warning than to let them fail individually.
-        console.warn("schedulerService: OPNsense is not configured. Active rule schedules that depend on OPNsense will not function correctly.");
-        // Depending on policy, you might choose not to schedule them at all.
-        // For now, they will be scheduled, and individual jobs will fail if OPNsense is needed.
-    }
-
-    try {
-        const activeSchedulesFromDB = await db.getAllActiveSchedules(); // This should join with ManagedRules
-        console.log(`Found ${activeSchedulesFromDB.length} active schedules in DB.`);
-        
-        // Clear any existing jobs first (e.g., if app is restarting)
-        for (const jobId in activeJobs) {
-            unscheduleJob(jobId);
-        }
-
-        activeSchedulesFromDB.forEach(schedule => {
-            if (!schedule.opnsense_rule_uuid) {
-                console.error(`Schedule ID ${schedule.id} is missing opnsense_rule_uuid. Cannot schedule. Check DB integrity.`);
-                return;
-            }
-            scheduleJob(schedule);
-        });
-        console.log(`schedulerService: Finished loading ${Object.keys(activeJobs).length} jobs.`);
-    } catch (error) {
-        console.error("schedulerService: Error loading active jobs from database:", error);
-    }
-}
+// Original loadAndScheduleAllActiveJobs was here, now removed to fix duplicate declaration.
+// The version at the end of the file is more complete.
 
 module.exports = {
     scheduleJob,

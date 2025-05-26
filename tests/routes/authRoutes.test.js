@@ -1,5 +1,21 @@
 const request = require('supertest');
-const app = require('../../app'); // Adjust path as necessary to your main app file
+
+// Mock db/database.js BEFORE requiring app.js
+const mockUserForAuthRouteTests = { id: 'testuserid', google_id: 'testgoogleid', email: 'test@example.com', displayName: 'Test User', is_admin: false };
+
+jest.mock('../../db/database', () => ({
+    initializeDatabase: jest.fn(), 
+    getDB: jest.fn(() => ({ 
+        prepare: jest.fn(() => ({ get: jest.fn(), all: jest.fn(), run: jest.fn() })),
+        exec: jest.fn(),
+    })), 
+    getSetting: jest.fn(), 
+    getAllSettings: jest.fn(() => ({})), 
+    // Add getUserById mock as it's called by deserializeUser during req.logIn
+    getUserById: jest.fn(id => Promise.resolve( id === mockUserForAuthRouteTests.id ? mockUserForAuthRouteTests : null ))
+}));
+
+const app = require('../../app'); 
 const passport = require('passport'); // To potentially mock parts of it
 
 // Mock the services/authService.js to prevent actual Google OAuth calls during tests
@@ -40,32 +56,49 @@ describe('Auth Routes - /auth', () => {
         process.env.APP_BASE_URL = 'http://localhost:3000';
 
         // Mock passport.authenticate specifically for these route tests
-        // This is a common way to test routes protected by Passport.
-        jest.spyOn(passport, 'authenticate').mockImplementation((strategy, options) => {
+        jest.spyOn(passport, 'authenticate').mockImplementation((strategy, optionsOrCb, cbIfOptions) => {
+            let options = {};
+            let actualRouteCb = null; // This is the (err, user, info) => { ... } callback from routes/authRoutes.js
+
+            if (typeof optionsOrCb === 'function') {
+                actualRouteCb = optionsOrCb;
+            } else {
+                options = optionsOrCb || {};
+                actualRouteCb = cbIfOptions;
+            }
+
+            // This is the middleware function that passport.authenticate returns
             return (req, res, next) => {
-                // Simulate Google strategy behavior for these tests
                 if (strategy === 'google') {
-                    if (options && options.scope) { // This is the initial /auth/google call
-                        // Simulate redirect to Google
-                        // In a real test, you might not actually check this redirect in supertest,
-                        // but rather the behavior of your callback.
-                        // For now, let's assume it proceeds.
-                        // The actual redirect is hard to test without a more complex setup.
-                        // We are more interested in the callback.
-                        return res.redirect('/mock-google-auth-page'); // Simulate redirect
-                    } else { // This is for the /auth/google/callback
-                        // Simulate success or failure based on test case
-                        if (req.query.autherror === 'true') { // Simulate an error from Google
-                            return options.failureRedirect ? res.redirect(options.failureRedirect) : next(new Error("Simulated auth error"));
-                        }
-                        // Simulate successful authentication: attach user to req and call next()
-                        // The actual user creation/finding is tested in authService.test.js
-                        req.user = { id: 'testuserid', email: 'test@example.com', displayName: 'Test User', is_admin: false };
-                        return res.redirect('/'); // Simulate success redirect from strategy
+                    // For the initial call: GET /auth/google
+                    if (options && options.scope) {
+                        return res.redirect('/mock-google-auth-page'); // Simulate redirection to Google
                     }
+                    
+                    // For the callback: GET /auth/google/callback
+                    // Here, we need to simulate the Passport strategy invoking the 'actualRouteCb'
+                    if (actualRouteCb) {
+                        if (req.query.autherror === 'true') {
+                            // Simulate Google strategy calling back with an error/no user
+                            actualRouteCb(null, false, { message: 'Simulated Google Auth Failure from mock' });
+                        } else {
+                            // Simulate Google strategy calling back with a user
+                            // Use the same user object that getUserById will return for consistency
+                            actualRouteCb(null, { ...mockUserForAuthRouteTests }, null); 
+                        }
+                    } else {
+                        // Fallback for passport.authenticate without a custom callback (not used by this route for callback)
+                        if (req.query.autherror === 'true' && options.failureRedirect) {
+                            return res.redirect(options.failureRedirect);
+                        }
+                        // This part of the mock is less likely to be hit by /auth/google/callback
+                        req.user = { ...mockUserForAuthRouteTests }; // Simulate user being set
+                        return res.redirect(options.successRedirect || '/'); // Default success
+                    }
+                } else {
+                    // Fallback for other strategies
+                    return next();
                 }
-                // Fallback for other strategies if any
-                return next();
             };
         });
     });

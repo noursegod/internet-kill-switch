@@ -1,55 +1,56 @@
 const { setupTestDb } = require('../helpers/dbHelper');
-const dbFunctions = require('../../db/database'); // Import all functions
+const dbFunctions = require('../../db/database'); // These are the functions we want to test
 const { v4: uuidv4 } = require('uuid');
 
-describe('Database Functions', () => {
-    let testDb;
+// Use an object handle for the DB instance, similar to settings.test.js
+const dbHandle = { instance: null };
+
+jest.mock('../../db/database', () => {
+    const originalModule = jest.requireActual('../../db/database');
+    return {
+        ...originalModule,
+        getDB: () => {
+            if (!dbHandle.instance) {
+                throw new Error("Test DB instance (dbHandle.instance) is not set in databaseFunctions.test.js. Check test setup.");
+            }
+            return dbHandle.instance;
+        },
+        initializeDatabase: jest.fn(), // Mock to prevent original from running and creating files
+    };
+});
+
+describe('Database Functions (CRUD operations)', () => { // Updated describe block
+    beforeAll(() => { // Changed from beforeEach to beforeAll for DB setup
+        dbHandle.instance = setupTestDb();
+    });
 
     beforeEach(() => {
-        // Important: For these tests to work correctly with the current db/database.js structure,
-        // db/database.js needs to be modified to use an in-memory database when NODE_ENV=test,
-        // or allow its internal `dbInstance` to be replaced.
-        // The setupTestDb() helper creates an isolated in-memory DB, but the imported
-        // dbFunctions will use their own `dbInstance` from the original module.
-        //
-        // Workaround: We will mock getDB within the dbFunctions module for these tests.
-        // This is a common pattern when testing modules with internal state or connections.
-        
-        // This approach is not ideal as it relies on the internal structure of database.js.
-        // A better long-term solution is dependency injection for the db instance in repo functions.
-        // However, for this task, we'll proceed with mocking `getDB`.
-
-        // testDb = setupTestDb(); // This creates an in-memory DB
-        // For now, we assume db/database.js already handles NODE_ENV=test or we test its default.
-        // To properly test with an isolated in-memory DB for EACH test using the imported functions,
-        // we'd need to modify db/database.js to allow setting the DB instance, or use jest.isolateModules.
-
-        // Let's assume db/database.js is already configured to use :memory: when NODE_ENV=test
-        // and initializeDatabase() is called. This is handled by the test script setting NODE_ENV=test
-        // and the module itself. We just need to ensure schema is applied for each test if it's a fresh :memory: db.
-        
-        // For true isolation with the current db/database.js structure, we'd need to reset the module
-        // or use a more complex setup. The simplest way for now is to run tests sequentially
-        // and clean up, or ensure initializeDatabase() can re-apply schema to an existing in-memory DB.
-        // The current initializeDatabase() applies schema only if DB file doesn't exist.
-        // For :memory:, it's new each time `new Database(':memory:')` is called.
-
-        // Resetting the database for each test manually for now.
-        const realDb = dbFunctions.getDB(); // Get the actual DB instance used by the module
+        // Clear all relevant tables before each test
         try {
-            realDb.exec('DROP TABLE IF EXISTS Schedules');
-            realDb.exec('DROP TABLE IF EXISTS Invitations');
-            realDb.exec('DROP TABLE IF EXISTS ManagedRules');
-            real_db.exec('DROP TABLE IF EXISTS Users');
-        } catch (e) { /* ignore if tables don't exist */ }
-        dbFunctions.initializeDatabase(); // Re-initialize schema
+            dbHandle.instance.exec('DELETE FROM Schedules');
+            dbHandle.instance.exec('DELETE FROM Invitations');
+            dbHandle.instance.exec('DELETE FROM AppSettings'); // Added AppSettings
+            dbHandle.instance.exec('DELETE FROM ManagedRules');
+            dbHandle.instance.exec('DELETE FROM Users');
+        } catch (e) { 
+            console.error("Error clearing tables in databaseFunctions.test.js:", e.message);
+            // If tables don't exist on first run of a test, that's fine.
+            // The schema should ensure they exist.
+        }
+    });
+
+    afterAll(() => { // Added afterAll to close DB connection
+        if (dbHandle.instance) {
+            dbHandle.instance.close();
+            dbHandle.instance = null;
+        }
     });
 
     // === User Functions ===
     describe('User DB Functions', () => {
         test('findOrCreateUserByGoogleId should create a new user', () => {
             const googleProfile = { googleId: 'google123', email: 'test@example.com', displayName: 'Test User' };
-            const user = dbFunctions.findOrCreateUserByGoogleId(googleProfile);
+            const user = dbFunctions.findOrCreateUserByGoogleId(googleProfile); // dbFunctions here will use the mocked getDB
             expect(user).toBeDefined();
             expect(user.email).toBe(googleProfile.email);
             expect(user.google_id).toBe(googleProfile.googleId);
