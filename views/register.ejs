@@ -1,13 +1,14 @@
 <% include layout { 
     pageTitle: 'Register - OPNsense Rule Controller', 
     user: typeof user !== 'undefined' ? user : null, 
-    currentPath: '/auth/register',
-    body: `
+    currentPath: '/auth/register'
+} %>
+
         <div class="auth-container">
             <h2>Register</h2>
             <p>Create a new account.</p>
 
-            <%- include('partials/_flash_messages') %>
+            <% include('partials/_flash_messages') %>
 
             <form action="/auth/register" method="POST" class="auth-form">
                 <div class="form-group">
@@ -41,5 +42,3 @@
             .auth-form button { width: 100%; padding: 12px; font-size: 1.1em; }
             .auth-switch-link { margin-top: 20px; }
         </style>
-    `
-} %>
