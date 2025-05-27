@@ -138,7 +138,7 @@ exports.postSetupPage = (req, res) => {
 };
 
 
-exports.getAdminSettingsPage = (req, res) => {
+exports.getAdminSettingsPage = async (req, res) => {
     try {
         const dbSettings = getAllSettings();
         const formData = req.session.adminSettingsFormPrefill || {};
