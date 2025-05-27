@@ -214,6 +214,7 @@ module.exports = {
     // User and OOBE functions
     findOrCreateUserByGoogleId, // Ensure this is the updated version
     getUserById,
+    findUserByGoogleId, // Added
     countUsers,
     createUser,
     findUserByEmail,
