@@ -36,6 +36,7 @@ router.get('/register', async (req, res, next) => { // Made async and added next
         // input data for prefill should be passed in pageData if needed, e.g.,
         // input: req.session.input || {}
     };
+
     // if (req.session.input) delete req.session.input; // Example cleanup
 
     try {

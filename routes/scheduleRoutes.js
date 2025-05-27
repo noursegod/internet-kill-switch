@@ -16,6 +16,7 @@ router.get('/', async (req, res, next) => { // Added next
         const schedulesFromController = await scheduleController.listSchedulesForUser(req, res); // Renamed to avoid conflict
         const managedRulesFromDb = await db.getAllManagedRulesForUser({ userId: req.user.id }); // Renamed
 
+
         const pageData = {
             pageTitle: 'Manage Schedules',
             schedules: schedulesFromController,
