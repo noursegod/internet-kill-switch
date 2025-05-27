@@ -101,7 +101,7 @@ router.get('/rules', isAuthenticated, async (req, res, next) => { // Added next
                 liveOpnsenseRules = await opnsenseService.fetchFirewallRules();
             } catch (opnsenseError) {
                 console.error("Error fetching live OPNsense rules for /rules page:", opnsenseError);
-                req.flash('error', 'Could not connect to OPNsense to get live rule statuses.'); // Requires connect-flash
+                req.session.flashMessages = { type: 'danger', message: 'Could not connect to OPNsense to get live rule statuses.' }; // Requires connect-flash
             }
 
             const liveRulesMap = new Map(liveOpnsenseRules.map(r => [r.uuid, r]));
@@ -146,7 +146,7 @@ router.get('/rules', isAuthenticated, async (req, res, next) => { // Added next
                 live_opnsense_status: 'opnsense_unavailable',
                 timer_info: null // Cannot determine timer without OPNsense usually
             }));
-            req.flash('warning', 'OPNsense API not configured. Displaying stored data only.');
+            req.session.flashMessages = { type: 'warning', message: 'OPNsense API not configured. Displaying stored data only.' };
         }
         
         const pageData = {
@@ -183,7 +183,7 @@ router.get('/rules/fetch-opnsense', isAuthenticated, async (req, res) => {
     const opnsenseService = getOpnsenseServiceInstance();
 
     if (!opnsenseService) {
-        req.flash('error', 'OPNsense API not configured. Cannot fetch rules.');
+        req.session.flashMessages = { type: 'danger', message: 'OPNsense API not configured. Cannot fetch rules.' };
         return res.redirect('/rules');
     }
     try {
@@ -191,10 +191,10 @@ router.get('/rules/fetch-opnsense', isAuthenticated, async (req, res) => {
         // Store in session for display on the /rules GET route
         req.session.fetchedOpnsenseRules = rules; 
         req.session.vlanFilterValue = vlanFilter; // Store filter for display
-        req.flash('success', `Fetched ${rules.length} rules from OPNsense.` + (vlanFilter ? ` Filter attempted for '${vlanFilter}'.` : ''));
+        req.session.flashMessages = { type: 'success', message: `Fetched ${rules.length} rules from OPNsense.` + (vlanFilter ? ` Filter attempted for '${vlanFilter}'.` : '') };
     } catch (error) {
         console.error("Error fetching OPNsense rules:", error);
-        req.flash('error', `Failed to fetch rules from OPNsense: ${error.message}`);
+        req.session.flashMessages = { type: 'danger', message: `Failed to fetch rules from OPNsense: ${error.message}` };
         req.session.fetchedOpnsenseRules = null; // Clear on error
     }
     res.redirect('/rules');
@@ -206,15 +206,15 @@ router.post('/rules/manage/add', isAuthenticated, async (req, res) => {
     const userId = req.user.id;
 
     if (!opnsense_rule_uuid) {
-        req.flash('error', 'OPNsense Rule UUID is required.');
+        req.session.flashMessages = { type: 'danger', message: 'OPNsense Rule UUID is required.' };
         return res.redirect('/rules');
     }
     try {
         await db.addManagedRule({ uuid: opnsense_rule_uuid, description, userId, desiredState: false }); // Default to false (disabled)
-        req.flash('success', `Rule ${description || opnsense_rule_uuid} added to managed list.`);
+        req.session.flashMessages = { type: 'success', message: `Rule ${description || opnsense_rule_uuid} added to managed list.` };
     } catch (error) {
         console.error("Error adding managed rule:", error);
-        req.flash('error', `Failed to add rule: ${error.message}`);
+        req.session.flashMessages = { type: 'danger', message: `Failed to add rule: ${error.message}` };
     }
     res.redirect('/rules');
 });
