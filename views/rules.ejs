@@ -17,7 +17,7 @@
 
             <section id="fetch-opnsense-rules">
                 <h3>Fetch Rules from OPNsense</h3>
-                <form action="/rules/fetch-opnsense" method="POST" class="form-inline">
+                <form action="/rules/fetch-opnsense" method="GET" class="form-inline">
                     <div class="form-group">
                         <label for="vlanFilter">Filter by Interface/VLAN (optional):</label>
                         <input type="text" name="vlanFilter" id="vlanFilter" placeholder="e.g., vlan02, igb1, LAN" value="<%= typeof vlanFilterValue !== 'undefined' ? vlanFilterValue : '' %>">
