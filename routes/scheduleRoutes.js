@@ -17,13 +17,13 @@ router.get('/', async (req, res) => {
         // const messages = req.flash(); // Example: { error: ['Msg 1'], success: ['Msg 2'] }
 
         res.render('schedules', {
-            pageTitle: 'Manage Schedules',
-            user: req.user,
+            pageTitle: 'Manage Schedules', // Already correct
+            // user: req.user, // now in res.locals
             schedules: schedules,
             managedRules: managedRules, // For the "Add Schedule" form dropdown
-            currentPath: '/schedules',
-            messages: {} // Replace with actual flash messages if implemented
-            // queryMessages: { error: req.query.error, success: req.query.success } // If using query params
+            // currentPath: '/schedules', // now in res.locals
+            // messages: {} // sessionFlashMessages is global
+            // queryMessages: { error: req.query.error, success: req.query.success } // queryMessages is global
         });
     } catch (error) {
         console.error("Error rendering schedules page:", error);
