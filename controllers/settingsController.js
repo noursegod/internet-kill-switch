@@ -1,3 +1,5 @@
+const ejs = require('ejs'); // Added EJS
+const path = require('path'); // Added Path
 const { getSetting, setSetting, getAllSettings } = require('../db/database');
 
 // Helper function for URL validation
@@ -17,34 +19,40 @@ function isValidHttpUrl(string) {
 // We use it here to determine if a DB-retrieved value is effectively "not set".
 const DEFAULT_PLACEHOLDER = "!!MUST_BE_SET_IN_ENVIRONMENT!!";
 
-exports.getSetupPage = (req, res) => {
+exports.getSetupPage = async (req, res, next) => { // Made async, added next
     try {
         const setupComplete = getSetting('initial_setup_complete') === 'true';
         if (setupComplete) {
             return res.redirect('/');
         }
 
-        const formData = req.session.setupFormPrefill || {};
-        delete req.session.setupFormPrefill;
-
-        // Initial settings from config/env (these are defaults before setup is complete)
-        const initialSettings = {
-            APP_BASE_URL: req.app.config.APP_BASE_URL !== DEFAULT_PLACEHOLDER ? req.app.config.APP_BASE_URL : (process.env.APP_BASE_URL || ''),
-            SESSION_SECRET: req.app.config.SESSION_SECRET, // Updated key
-            OPNSENSE_BASE_URL: req.app.config.OPNSENSE_BASE_URL !== DEFAULT_PLACEHOLDER ? req.app.config.OPNSENSE_BASE_URL : (process.env.OPNSENSE_BASE_URL || ''),
-            OPNSENSE_API_KEY: req.app.config.OPNSENSE_API_KEY !== DEFAULT_PLACEHOLDER ? req.app.config.OPNSENSE_API_KEY : (process.env.OPNSENSE_API_KEY || ''),
-            GOOGLE_CLIENT_ID: req.app.config.GOOGLE_CLIENT_ID !== DEFAULT_PLACEHOLDER ? req.app.config.GOOGLE_CLIENT_ID : (process.env.GOOGLE_CLIENT_ID || ''),
+        const pageData = {
+            pageTitle: 'Application Setup',
+            settings: { // Initial settings from config/env (these are defaults before setup is complete)
+                APP_BASE_URL: req.app.config.APP_BASE_URL !== DEFAULT_PLACEHOLDER ? req.app.config.APP_BASE_URL : (process.env.APP_BASE_URL || ''),
+                SESSION_SECRET: req.app.config.SESSION_SECRET,
+                OPNSENSE_BASE_URL: req.app.config.OPNSENSE_BASE_URL !== DEFAULT_PLACEHOLDER ? req.app.config.OPNSENSE_BASE_URL : (process.env.OPNSENSE_BASE_URL || ''),
+                OPNSENSE_API_KEY: req.app.config.OPNSENSE_API_KEY !== DEFAULT_PLACEHOLDER ? req.app.config.OPNSENSE_API_KEY : (process.env.OPNSENSE_API_KEY || ''),
+                GOOGLE_CLIENT_ID: req.app.config.GOOGLE_CLIENT_ID !== DEFAULT_PLACEHOLDER ? req.app.config.GOOGLE_CLIENT_ID : (process.env.GOOGLE_CLIENT_ID || ''),
+            },
+            formData: req.session.setupFormPrefill || {}
         };
+        if (req.session.setupFormPrefill) delete req.session.setupFormPrefill;
         
-        res.render('setup', { 
-            pageTitle: 'Application Setup', // Changed title to pageTitle and updated value
-            settings: initialSettings, 
-            formData: formData        
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'setup.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
         });
-    } catch (error) {
-        console.error("Error in getSetupPage:", error);
-        req.session.flashMessages = { error: "Error loading setup page. Please check logs." };
-        res.redirect('/login'); // Redirect to login or a generic error page
+    } catch (err) { // Changed error variable name for consistency
+        console.error(`Error in getSetupPage or rendering setup.ejs/layout:`, err);
+        // req.session.flashMessages = { error: "Error loading setup page. Please check logs." };
+        // res.redirect('/login'); // Redirecting here might be problematic.
+        next(err); // Propagate error
     }
 };
 
@@ -157,15 +165,26 @@ exports.getAdminSettingsPage = (req, res) => {
             templateSettings.SESSION_SECRET_STATUS_MESSAGE = "Not Set or Using Default Placeholder! This is a security risk. Set via Environment.";
         }
 
-        res.render('admin_settings', {
-            pageTitle: 'Admin - Settings', // Changed title to pageTitle and updated value
-            settings: templateSettings, 
-            formData: formData 
+        const pageData = {
+            pageTitle: 'Admin - Settings',
+            settings: templateSettings,
+            formData: formData
+        };
+
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'admin_settings.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
         });
-    } catch (error) {
-        console.error("Error in getAdminSettingsPage:", error);
-        req.session.flashMessages = { error: "Error loading admin settings page." };
-        res.redirect('/admin');
+    } catch (err) { // Changed error variable name for consistency
+        console.error(`Error in getAdminSettingsPage or rendering admin_settings.ejs/layout:`, err);
+        // req.session.flashMessages = { error: "Error loading admin settings page." };
+        // res.redirect('/admin'); // Redirecting here might be problematic.
+        next(err); // Propagate error
     }
 };
 

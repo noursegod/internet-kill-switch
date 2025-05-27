@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const ejs = require('ejs'); // Added EJS
+const path = require('path'); // Added Path
 const { isAuthenticated } = require('../middleware/authMiddleware'); // Assuming isAdmin is not strictly needed for user's own schedules
 const scheduleController = require('../controllers/scheduleController');
 const db = require('../db/database'); // For fetching managed rules for the form
@@ -8,27 +10,35 @@ const db = require('../db/database'); // For fetching managed rules for the form
 router.use(isAuthenticated);
 
 // GET /schedules - List all schedules for the logged-in user
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => { // Added next
     try {
-        const schedules = await scheduleController.listSchedulesForUser(req, res);
-        const managedRules = await db.getAllManagedRulesForUser({ userId: req.user.id });
-        
-        // Handle flash messages if connect-flash is integrated
-        // const messages = req.flash(); // Example: { error: ['Msg 1'], success: ['Msg 2'] }
+        // Data fetching remains the same
+        const schedulesFromController = await scheduleController.listSchedulesForUser(req, res); // Renamed to avoid conflict
+        const managedRulesFromDb = await db.getAllManagedRulesForUser({ userId: req.user.id }); // Renamed
 
-        res.render('schedules', {
-            pageTitle: 'Manage Schedules', // Already correct
-            // user: req.user, // now in res.locals
-            schedules: schedules,
-            managedRules: managedRules, // For the "Add Schedule" form dropdown
-            // currentPath: '/schedules', // now in res.locals
-            // messages: {} // sessionFlashMessages is global
-            // queryMessages: { error: req.query.error, success: req.query.success } // queryMessages is global
+
+        const pageData = {
+            pageTitle: 'Manage Schedules',
+            schedules: schedulesFromController,
+            managedRules: managedRulesFromDb
+            // user, currentPath, messages, queryMessages are in res.locals or handled by sessionFlashMessages
+        };
+        
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'schedules.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
         });
     } catch (error) {
-        console.error("Error rendering schedules page:", error);
-        // req.flash('error', 'Could not load schedules page.');
-        res.redirect('/'); // Or render a generic error page
+        console.error("Error in GET /schedules (controller logic or rendering):", error);
+        // req.flash('error', 'Could not load schedules page.'); // req.flash not reliable
+        req.session.flashMessages = { type: 'error', message: 'Could not load schedules page.' };
+        // res.redirect('/'); // Redirecting here might be problematic.
+        next(error); // Propagate error
     }
 });
 
