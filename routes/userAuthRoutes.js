@@ -10,7 +10,7 @@ router.get('/login', (req, res) => {
     // If not, it needs to be explicitly fetched or passed.
     // For now, assume it's available or views handle its absence.
     res.render('login', { 
-        pageTitle: 'Login',
+        pageTitle: 'Login - OPNsense Rule Controller',
         // Pass any necessary variables for the login.ejs template,
         // like is_google_oauth_configured, which is used in the template.
         // These are typically set globally in app.js for all views.
@@ -21,7 +21,7 @@ router.get('/login', (req, res) => {
 // GET /register - Display registration page
 router.get('/register', (req, res) => {
     res.render('register', { 
-        pageTitle: 'Register',
+        pageTitle: 'Register - OPNsense Rule Controller',
         // Pass any necessary variables for the register.ejs template
         // For example, if you want to pass back input values on validation error:
         // input: req.session.input || {} // Clear after use if needed

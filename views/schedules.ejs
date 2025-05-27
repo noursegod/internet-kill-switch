@@ -1,10 +1,4 @@
-<% include layout { 
-    pageTitle: pageTitle || 'Manage Schedules', 
-    user: user, 
-    currentPath: currentPath,
-    messages: messages, // Assuming messages are passed from the route
-    queryMessages: queryMessages // Assuming queryMessages are passed
-} %>
+<%- include('layout') %>
 
         <div class="schedules-container">
             <h2>Rule Schedules</h2>

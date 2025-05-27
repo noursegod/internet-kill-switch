@@ -37,7 +37,7 @@ exports.getSetupPage = (req, res) => {
         };
         
         res.render('setup', { 
-            title: 'Initial Application Setup',
+            pageTitle: 'Application Setup', // Changed title to pageTitle and updated value
             settings: initialSettings, 
             formData: formData        
         });
@@ -158,7 +158,7 @@ exports.getAdminSettingsPage = (req, res) => {
         }
 
         res.render('admin_settings', {
-            title: 'Admin - Application Settings',
+            pageTitle: 'Admin - Settings', // Changed title to pageTitle and updated value
             settings: templateSettings, 
             formData: formData 
         });

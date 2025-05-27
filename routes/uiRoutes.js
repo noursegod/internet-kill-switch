@@ -39,18 +39,20 @@ router.get('/', (req, res) => {
         //     // For now, let's assume authService handles clearing it post-registration.
         // }
         return res.render('index', { 
-            user: req.user, 
+            pageTitle: 'Welcome - OPNsense Rule Controller', // Added pageTitle
+            // user: req.user, // now in res.locals
             invitationCode: req.session.invitationCode, // Pass to template if needed
-            queryMessages,
-            currentPath: '/'
+            // queryMessages, // now in res.locals
+            // currentPath: '/' // now in res.locals
         });
     } else {
         // Not authenticated
         return res.render('index', { 
-            user: null, 
+            pageTitle: 'Welcome - OPNsense Rule Controller', // Added pageTitle
+            // user: null, // now in res.locals
             invitationCode: req.session.invitationCode,
-            queryMessages,
-            currentPath: '/'
+            // queryMessages, // now in res.locals
+            // currentPath: '/' // now in res.locals
         });
     }
 });
@@ -64,12 +66,13 @@ router.get('/login', (req, res) => {
     // Pass any specific messages for the login page, e.g., from auth failures
     // req.flash() messages are not set up yet, so using query params for now.
     res.render('login', { 
-        user: null, 
-        currentPath: '/login',
-        messages: req.session.messages || [], // Placeholder for connect-flash
-        queryMessages // Pass query-based messages
+        pageTitle: 'Login - OPNsense Rule Controller', // Added pageTitle
+        // user: null, // now in res.locals
+        // currentPath: '/login', // now in res.locals
+        // messages: req.session.messages || [], // Placeholder for connect-flash; sessionFlashMessages is global
+        // queryMessages // Pass query-based messages; queryMessages is global
     });
-    req.session.messages = []; // Clear messages after displaying
+    // req.session.messages = []; // Clear messages after displaying // sessionFlashMessages handles this
 });
 
 
@@ -140,12 +143,13 @@ router.get('/rules', isAuthenticated, async (req, res) => {
         }
         
         res.render('rules', {
-            user: req.user,
+            pageTitle: 'Manage Firewall Rules', // Added pageTitle
+            // user: req.user, // now in res.locals
             managedRules: managedRulesWithStatus,
             fetchedOpnsenseRules: fetchedOpnsenseRules, // From session or null
             vlanFilterValue: vlanFilterValue, // For the input field
-            currentPath: '/rules',
-            messages: req.flash ? req.flash() : {} // For connect-flash if used
+            // currentPath: '/rules', // now in res.locals
+            // messages: req.flash ? req.flash() : {} // For connect-flash if used; sessionFlashMessages is global
         });
     } catch (error) {
         console.error("Error in GET /rules:", error);
