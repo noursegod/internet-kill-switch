@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS Schedules (
     cron_expression TEXT NOT NULL,
     action_type TEXT NOT NULL, 
     action_params TEXT, 
-    is_active BOOLEAN DEFAULT TRUE,
+    is_enabled BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_triggered_at DATETIME DEFAULT NULL, -- Added based on updateScheduleLastTriggered
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS JobRuns (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON Users(email);
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON Users(google_id);
-CREATE INDEX IF NOT EXISTS idx_schedules_is_active ON Schedules(is_active);
+CREATE INDEX IF NOT EXISTS idx_schedules_is_enabled ON Schedules(is_enabled);
 CREATE INDEX IF NOT EXISTS idx_jobruns_schedule_id ON JobRuns(schedule_id);
 CREATE INDEX IF NOT EXISTS idx_jobruns_status ON JobRuns(status);
 CREATE INDEX IF NOT EXISTS idx_jobruns_run_at ON JobRuns(run_at);
