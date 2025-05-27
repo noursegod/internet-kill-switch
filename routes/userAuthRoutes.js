@@ -1,32 +1,57 @@
 const express = require('express');
 const router = express.Router();
+const ejs = require('ejs'); // Added EJS
+const path = require('path'); // Added Path
 const passport = require('passport'); // For Google linking
 const authService = require('../services/authService');
 const { isAuthenticated } = require('../middleware/authMiddleware'); // To protect linking routes
 
 // GET /login - Display login page
-router.get('/login', (req, res) => {
-    // The 'is_google_oauth_configured' variable should be available from res.locals if set by app.js middleware
-    // If not, it needs to be explicitly fetched or passed.
-    // For now, assume it's available or views handle its absence.
-    res.render('login', { 
-        pageTitle: 'Login',
-        // Pass any necessary variables for the login.ejs template,
-        // like is_google_oauth_configured, which is used in the template.
-        // These are typically set globally in app.js for all views.
-        // We can rely on res.locals set by the context processor in app.js
-    });
+router.get('/login', async (req, res, next) => { // Made async and added next
+    const pageData = {
+        pageTitle: 'Login - OPNsense Rule Controller'
+        // Other necessary variables for login.ejs are expected to be in res.locals
+    };
+
+    try {
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'login.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
+        });
+    } catch (err) {
+        console.error(`Error rendering page login.ejs or layout:`, err);
+        next(err);
+    }
 });
 
 // GET /register - Display registration page
-router.get('/register', (req, res) => {
-    res.render('register', { 
-        pageTitle: 'Register',
-        // Pass any necessary variables for the register.ejs template
-        // For example, if you want to pass back input values on validation error:
-        // input: req.session.input || {} // Clear after use if needed
-    });
+router.get('/register', async (req, res, next) => { // Made async and added next
+    const pageData = {
+        pageTitle: 'Register - OPNsense Rule Controller'
+        // input data for prefill should be passed in pageData if needed, e.g.,
+        // input: req.session.input || {}
+    };
     // if (req.session.input) delete req.session.input; // Example cleanup
+
+    try {
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'register.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
+        });
+    } catch (err) {
+        console.error(`Error rendering page register.ejs or layout:`, err);
+        next(err);
+    }
 });
 
 // POST /register - User registration

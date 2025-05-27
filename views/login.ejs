@@ -1,9 +1,3 @@
-<% include layout { 
-    pageTitle: 'Login - OPNsense Rule Controller', 
-    user: typeof user !== 'undefined' ? user : null, 
-    currentPath: '/auth/login', // Updated currentPath
-    // sessionFlashMessages is available globally via app.locals or context processor in app.js
-} %>
 
         <div class="auth-container">
             <h2>Login</h2>
@@ -40,11 +34,7 @@
             <hr style="margin-top: 30px; margin-bottom: 20px;">
             <h4>Configuration Status Overview:</h4>
             <p><small>This section is for diagnostic purposes.</small></p>
-            <% include('partials/_config_status', {
-                is_app_secret_key_configured: typeof is_app_secret_key_configured !== 'undefined' ? is_app_secret_key_configured : false,
-                is_opnsense_fully_configured: typeof is_opnsense_fully_configured !== 'undefined' ? is_opnsense_fully_configured : false,
-                is_google_oauth_configured: typeof is_google_oauth_configured !== 'undefined' ? is_google_oauth_configured : false
-            }) %>
+            <%- include('partials/_config_status') %>
         </div>
         <style>
             .auth-container { text-align: center; max-width: 400px; margin: 30px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.05); }

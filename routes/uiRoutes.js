@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const ejs = require('ejs'); // Added EJS
+const path = require('path'); // Added Path
 const { isAuthenticated } = require('../middleware/authMiddleware');
 const OpnsenseService = require('../services/opnsenseService'); // Assuming OpnsenseService is default export
 const db = require('../db/database'); // Access all DB functions via this
@@ -20,10 +22,10 @@ function getOpnsenseServiceInstance() {
 }
 
 // GET / - Home/Index page
-router.get('/', (req, res) => {
-    const queryMessages = {};
-    if (req.query.error) queryMessages.error = req.query.error;
-    if (req.query.message) queryMessages.message = req.query.message;
+router.get('/', async (req, res, next) => { // Made async and added next
+    // const queryMessages = {}; // queryMessages are now in res.locals
+    // if (req.query.error) queryMessages.error = req.query.error;
+    // if (req.query.message) queryMessages.message = req.query.message;
 
     if (req.query.invitation_code) {
         req.session.invitationCode = req.query.invitation_code;
@@ -31,51 +33,59 @@ router.get('/', (req, res) => {
         return res.redirect('/'); // Redirect to clean the URL
     }
 
-    if (req.isAuthenticated()) {
-        // If authenticated, and was trying to use an invitation, clear it now it's "seen"
-        // The actual use of invitation happens at registration/first login in authService.js
-        // if (req.session.invitationCode) { 
-        //     // We might not want to clear it here, but rather after successful registration/link.
-        //     // For now, let's assume authService handles clearing it post-registration.
-        // }
-        return res.render('index', { 
-            user: req.user, 
-            invitationCode: req.session.invitationCode, // Pass to template if needed
-            queryMessages,
-            currentPath: '/'
+    const pageData = {
+        pageTitle: 'Welcome - OPNsense Rule Controller',
+        invitationCode: req.session.invitationCode
+        // user and queryMessages are in res.locals
+    };
+
+    try {
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'index.ejs'),
+            { ...pageData, ...res.locals }, // Pass pageData and existing res.locals
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
         });
-    } else {
-        // Not authenticated
-        return res.render('index', { 
-            user: null, 
-            invitationCode: req.session.invitationCode,
-            queryMessages,
-            currentPath: '/'
-        });
+    } catch (err) {
+        console.error(`Error rendering page index.ejs or layout:`, err);
+        next(err);
     }
 });
 
 // GET /login - Render login page
-router.get('/login', (req, res) => {
-    const queryMessages = {};
-    if (req.query.error) queryMessages.error = req.query.error;
-    if (req.query.message) queryMessages.message = req.query.message;
+router.get('/login', async (req, res, next) => { // Made async and added next
+    // const queryMessages = {}; // queryMessages are now in res.locals
+    // if (req.query.error) queryMessages.error = req.query.error;
+    // if (req.query.message) queryMessages.message = req.query.message;
     
-    // Pass any specific messages for the login page, e.g., from auth failures
-    // req.flash() messages are not set up yet, so using query params for now.
-    res.render('login', { 
-        user: null, 
-        currentPath: '/login',
-        messages: req.session.messages || [], // Placeholder for connect-flash
-        queryMessages // Pass query-based messages
-    });
-    req.session.messages = []; // Clear messages after displaying
+    const pageData = {
+        pageTitle: 'Login - OPNsense Rule Controller'
+        // user, currentPath, messages, queryMessages are in res.locals or handled by sessionFlashMessages
+    };
+
+    try {
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'login.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
+        });
+    } catch (err) {
+        console.error(`Error rendering page login.ejs or layout:`, err);
+        next(err);
+    }
 });
 
 
 // GET /rules - Display managed rules and fetched OPNsense rules
-router.get('/rules', isAuthenticated, async (req, res) => {
-    const userId = req.user.id;
+router.get('/rules', isAuthenticated, async (req, res, next) => { // Added next
+    const userId = req.user.id; // Still needed for DB query
     let managedRulesWithStatus = [];
     let fetchedOpnsenseRules = req.session.fetchedOpnsenseRules || null; // Get from session if previously fetched
     let vlanFilterValue = req.session.vlanFilterValue || ''; // Persist filter value
@@ -139,18 +149,31 @@ router.get('/rules', isAuthenticated, async (req, res) => {
             req.flash('warning', 'OPNsense API not configured. Displaying stored data only.');
         }
         
-        res.render('rules', {
-            user: req.user,
+        const pageData = {
+            pageTitle: 'Manage Firewall Rules',
             managedRules: managedRulesWithStatus,
             fetchedOpnsenseRules: fetchedOpnsenseRules, // From session or null
             vlanFilterValue: vlanFilterValue, // For the input field
-            currentPath: '/rules',
-            messages: req.flash ? req.flash() : {} // For connect-flash if used
+            // user, currentPath, messages are in res.locals or handled by sessionFlashMessages
+        };
+
+        const contentHtml = await ejs.renderFile(
+            path.join(req.app.get('views'), 'rules.ejs'),
+            { ...pageData, ...res.locals },
+            { async: true }
+        );
+        res.render('layout', {
+            pageTitle: pageData.pageTitle,
+            body: contentHtml
         });
-    } catch (error) {
-        console.error("Error in GET /rules:", error);
-        req.flash('error', 'Failed to load rule management page.');
-        res.redirect('/'); // Or render an error page
+        // Removed original catch block as the new pattern has its own.
+    } catch (error) { // This catch is for the outer try-catch block including DB operations
+        console.error("Error in GET /rules (controller logic):", error);
+        // req.flash is not reliable if not setup, use sessionFlashMessages
+        req.session.flashMessages = { type: 'error', message: 'Failed to load rule management page.' };
+        // res.redirect('/'); // Redirecting here might be problematic if headers already sent by error in renderFile.
+                           // The new pattern's next(err) should handle it better.
+        next(error); // Propagate error to Express error handler
     }
 });
 

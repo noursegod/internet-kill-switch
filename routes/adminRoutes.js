@@ -17,8 +17,8 @@ router.get('/invitations', async (req, res) => {
         // app.set('views', path.join(__dirname, 'views'));
         res.render('admin_invitations', { 
             invitations: invitations,
-            user: req.user, // Pass user for layout/nav if needed
-            pageTitle: "Admin - Manage Invitations" 
+            // user: req.user, // user is now in res.locals
+            pageTitle: "Admin - Invitations" 
         });
     } catch (error) {
         console.error("Error rendering admin invitations page:", error);
