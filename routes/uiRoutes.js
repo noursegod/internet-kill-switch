@@ -177,9 +177,9 @@ router.get('/rules', isAuthenticated, async (req, res, next) => { // Added next
     }
 });
 
-// POST /rules/fetch-opnsense - Fetch rules from OPNsense
-router.post('/rules/fetch-opnsense', isAuthenticated, async (req, res) => {
-    const vlanFilter = req.body.vlanFilter || null;
+// GET /rules/fetch-opnsense - Fetch rules from OPNsense
+router.get('/rules/fetch-opnsense', isAuthenticated, async (req, res) => {
+    const vlanFilter = req.query.vlanFilter || null;
     const opnsenseService = getOpnsenseServiceInstance();
 
     if (!opnsenseService) {

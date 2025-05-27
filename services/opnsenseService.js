@@ -1,4 +1,5 @@
 const axios = require('axios');
+const https = require('https'); // Added https module
 
 class OpnsenseService {
     constructor(baseURL, apiKey, apiSecret) {
@@ -16,6 +17,15 @@ class OpnsenseService {
             },
             timeout: 5000, // 5 seconds
         });
+
+        // Check if SSL certificate validation should be ignored
+        if (process.env.OPNSENSE_IGNORE_CERT_ERRORS === 'true' || process.env.OPNSENSE_IGNORE_CERT_ERRORS === '1') {
+            const httpsAgent = new https.Agent({
+                rejectUnauthorized: false
+            });
+            this.client.defaults.httpsAgent = httpsAgent;
+            console.log('OpnsenseService: SSL certificate validation is DISABLED due to OPNSENSE_IGNORE_CERT_ERRORS environment variable.');
+        }
     }
 
     /**

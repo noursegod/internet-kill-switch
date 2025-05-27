@@ -80,6 +80,7 @@ cp .env.example .env
         *   `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
         *   `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret.
         *   `SESSION_SECRET`: A strong, random string for session security.
+        *   `OPNSENSE_IGNORE_CERT_ERRORS`: Set to `"true"` to disable SSL certificate validation for OPNsense API calls. **WARNING:** This is insecure and should only be used for development or testing with self-signed certificates. Defaults to `"false"`.
 
 ### In-Application Configuration & Out-of-Box Experience (OOBE)
 
